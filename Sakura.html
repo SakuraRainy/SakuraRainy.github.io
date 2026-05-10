@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SakuraRainy | 个人主页</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: system-ui, -apple-system, sans-serif;
+        }
+        body {
+            min-height: 100vh;
+            background: linear-gradient(135deg, #0f172a, #1e1b4b, #312e81);
+            color: #fff;
+            text-align: center;
+            padding: 60px 20px;
+            overflow-x: hidden;
+        }
+        /* 樱花飘落动画 */
+        .sakura {
+            position: fixed;
+            top: -10%;
+            z-index: -1;
+            animation: fall linear infinite;
+            opacity: 0.8;
+        }
+        @keyframes fall {
+            0% { transform: translateY(0) rotate(0deg); }
+            100% { transform: translateY(100vh) rotate(360deg); }
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            backdrop-filter: blur(10px);
+            background: rgba(255,255,255,0.05);
+            padding: 40px 30px;
+            border-radius: 20px;
+            border: 1px solid rgba(255,182,193,0.2);
+        }
+        h1 {
+            font-size: 44px;
+            margin-bottom: 20px;
+            background: linear-gradient(90deg, #ffb6c1, #e879f9, #a78bfa);
+            -webkit-background-clip: text;
+            color: transparent;
+            animation: shine 3s ease infinite;
+        }
+        @keyframes shine {
+            0%,100%{opacity:1}
+            50%{opacity:0.8}
+        }
+        .info {
+            font-size: 18px;
+            line-height: 1.8;
+            opacity: 0.9;
+            margin-bottom: 30px;
+        }
+        .github-link {
+            display: inline-block;
+            padding: 12px 28px;
+            background: linear-gradient(90deg, #f472b6, #a855f7);
+            color: white;
+            text-decoration: none;
+            border-radius: 50px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+        .github-link:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 30px rgba(244,114,182,0.4);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>✨ SakuraRainy ✨</h1>
+        <div class="info">
+            <p>欢迎来到我的个人主页</p>
+            <p>GitHub Pages 公网部署成功</p>
+            <p>浪漫樱花 · 无限热爱</p>
+        </div>
+        <a href="https://github.com/SakuraRainy" class="github-link">访问我的GitHub</a>
+    </div>
+
+    <!-- 自动生成樱花 -->
+    <script>
+        function createSakura() {
+            const sakura = document.createElement("div");
+            sakura.classList.add("sakura");
+            sakura.innerHTML = "🌸";
+            sakura.style.left = Math.random() * 100 + "vw";
+            sakura.style.fontSize = Math.random() * 12 + 8 + "px";
+            sakura.style.animationDuration = Math.random() * 5 + 5 + "s";
+            document.body.appendChild(sakura);
+            setTimeout(()=>sakura.remove(),10000);
+        }
+        setInterval(createSakura, 300);
+    </script>
+</body>
+</html>
