@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SakuraRainy · 樱花论坛</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: system-ui, -apple-system, sans-serif;
+        }
+        body {
+            min-height: 100vh;
+            background: linear-gradient(135deg, #0f172a, #1e1b4b, #312e81);
+            color: #fff;
+            padding: 80px 20px 40px;
+            overflow-x: hidden;
+        }
+        /* 樱花飘落 */
+        .sakura {
+            position: fixed;
+            top: -10%;
+            z-index: -1;
+            animation: fall linear infinite;
+            opacity: 0.8;
+        }
+        @keyframes fall {
+            0% { transform: translateY(0) rotate(0deg); }
+            100% { transform: translateY(100vh) rotate(360deg); }
+        }
+        .container {
+            max-width: 700px;
+            margin: 0 auto;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        h1 {
+            font-size: 36px;
+            background: linear-gradient(90deg, #ffb6c1, #e879f9);
+            -webkit-background-clip: text;
+            color: transparent;
+            margin-bottom:10px;
+        }
+        .back-home{
+            display:inline-block;
+            color:#ffb6c1;
+            text-decoration:none;
+            margin-bottom:20px;
+        }
+        .board {
+            background: rgba(255,255,255,0.05);
+            backdrop-filter: blur(10px);
+            border:1px solid rgba(255,182,193,0.2);
+            border-radius:16px;
+            padding:24px;
+            margin-bottom:20px;
+        }
+        .board h2{
+            color:#ffb6c1;
+            margin-bottom:10px;
+        }
+        .tip{
+            opacity:0.7;
+            font-size:14px;
+        }
+        .btn{
+            display:inline-block;
+            padding:10px 22px;
+            background:linear-gradient(90deg,#f472b6,#a855f7);
+            color:#fff;
+            text-decoration:none;
+            border-radius:50px;
+            margin-top:10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="sakura" id="sakuraBox"></div>
+    <div class="container">
+        <div class="header">
+            <a href="/" class="back-home">← 返回个人主页</a>
+            <h1>🌸 SakuraRainy 樱花论坛</h1>
+            <p class="tip">基于 GitHub Issues 搭建 · 免费永久可用</p>
+        </div>
+
+        <div class="board">
+            <h2>💬 闲聊板块</h2>
+            <p>日常聊天、心情分享、生活随拍</p>
+            <a href="https://github.com/SakuraRainy/SakuraRainy.github.io/issues/new?labels=闲聊" target="_blank" class="btn">发布新帖</a>
+        </div>
+
+        <div class="board">
+            <h2>💻 技术交流</h2>
+            <p>编程、网页、GitHub、前端问题讨论</p>
+            <a href="https://github.com/SakuraRainy/SakuraRainy.github.io/issues/new?labels=技术" target="_blank" class="btn">发布新帖</a>
+        </div>
+
+        <div class="board">
+            <h2>✨ 创意分享</h2>
+            <p>设计、代码作品、灵感分享</p>
+            <a href="https://github.com/SakuraRainy/SakuraRainy.github.io/issues/new?labels=创意" target="_blank" class="btn">发布新帖</a>
+        </div>
+
+        <div class="board">
+            <h2>📋 查看所有帖子</h2>
+            <p>浏览全部发帖、回复、评论</p>
+            <a href="https://github.com/SakuraRainy/SakuraRainy.github.io/issues" target="_blank" class="btn">进入帖子列表</a>
+        </div>
+    </div>
+
+    <script>
+        // 樱花
+        function createSakura(){
+            const s=document.createElement('div');
+            s.className='sakura';
+            s.innerHTML='🌸';
+            s.style.left=Math.random()*100+'vw';
+            s.style.fontSize=Math.random()*12+8+'px';
+            s.style.animationDuration=Math.random()*5+5+'s';
+            document.body.appendChild(s);
+            setTimeout(()=>s.remove(),10000);
+        }
+        setInterval(createSakura,300);
+    </script>
+</body>
+</html>
