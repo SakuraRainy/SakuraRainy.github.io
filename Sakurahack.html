@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>田果田，欢迎回来</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Fira+Mono:wght@400;700&display=swap');
+    html, body {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      background: #0c0c0c;
+      color: #00ff41;
+      font-family: 'Fira Mono', 'Consolas', mono;
+      overflow: hidden;
+    }
+
+    /* 黑客风格背景动画 */
+    .matrix {
+      position: fixed;
+      width: 100vw;
+      height: 100vh;
+      top: 0; left: 0;
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    .hacker-container {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      font-size: 2.2rem;
+      letter-spacing: 0.2rem;
+      text-shadow:
+        0 0 6px #00FF41,
+        0 0 20px #00FF4188,
+        0 0 40px #00fa6a33;
+      background: rgba(0,0,0,0.65);
+      border-radius: 15px;
+      padding: 50px 30px;
+      box-shadow: 0 0 40px #00FF4166;
+    }
+
+    .typed-text {
+      white-space: pre;
+    }
+
+    .cursor {
+      display: inline-block;
+      width: 1ch;
+      background: #00FF41;
+      animation: blink 0.8s steps(1, start) infinite;
+      margin-left: 2px;
+    }
+
+    @keyframes blink {
+      0%, 49% { background: #00ff41; }
+      50%, 100% { background: transparent; }
+    }
+  </style>
+</head>
+<body>
+  <canvas class="matrix"></canvas>
+  <div class="hacker-container">
+    <span class="typed-text"></span><span class="cursor"></span>
+  </div>
+  <script>
+    // matrix rain effect
+    const canvas = document.querySelector('.matrix');
+    const ctx = canvas.getContext('2d');
+    let width = canvas.width = window.innerWidth;
+    let height = canvas.height = window.innerHeight;
+    const fontSize = 22;
+    const columns = Math.floor(width / fontSize);
+    const drops = [];
+    for(let x = 0; x < columns; x++) drops[x] = Math.random()*height/fontSize;
+
+    function drawMatrix() {
+      ctx.fillStyle = 'rgba(12, 12, 12, .18)';
+      ctx.fillRect(0, 0, width, height);
+      ctx.font = fontSize + "px Fira Mono, Consolas, monospace";
+      ctx.fillStyle = '#00FF41';
+      for(let i = 0; i < drops.length; i++) {
+        const text = String.fromCharCode(0x30A0 + Math.random()*96);
+        ctx.fillText(text, i*fontSize, drops[i]*fontSize);
+        if(drops[i]*fontSize > height && Math.random() > 0.97) drops[i] = 0;
+        drops[i]++;
+      }
+    }
+    setInterval(drawMatrix, 57);
+    window.addEventListener('resize', () => {
+      width = canvas.width = window.innerWidth;
+      height = canvas.height = window.innerHeight;
+    });
+
+    // typewriter effect
+    const message = '田果田，欢迎回来';
+    const typedSpan = document.querySelector('.typed-text');
+    let idx = 0;
+    function typeEffect() {
+      typedSpan.textContent = message.slice(0, idx);
+      idx++;
+      if(idx <= message.length) setTimeout(typeEffect, 150);
+    }
+    typeEffect();
+  </script>
+</body>
+</html>
