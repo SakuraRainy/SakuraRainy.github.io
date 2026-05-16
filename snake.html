@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+  <title>俄罗斯方块 手机版</title>
+  <style>
+    body { background: #222; font-family: sans-serif; margin:0; }
+    .container { max-width:420px; margin:30px auto 0; background:#333; border-radius:8px; padding:12px; }
+    h1 { color:#fff; text-align:center;}
+    #score { text-align: right; color: #eee; font-size: 1.1em;}
+    #canvasWrap {
+      position:relative; margin:13px auto 7px auto;
+      background:#111; width:100%; max-width:320px; height:480px;
+      box-shadow:0 4px 14px #222;
+      border-radius:6px;
+    }
+    #board { display:block; width:100%; height:100%; touch-action: none;}
+    #gameover{
+      display:none;position:absolute;left:0;top:0;
+      width:100%;height:100%;background:rgba(44,39,56,0.83);
+      z-index:2; justify-content:center;align-items:center;flex-direction:column;
+      color:#fff;text-align:center;font-size:2em;
+    }
+    .btn { margin-top:20px; padding:8px 18px; background:#4caf50; color:#fff;border:none;border-radius:4px; font-size:1em;}
+    .ctrls {margin:15px auto 0 auto; display:flex; justify-content:space-between; gap:10px; max-width:320px;}
+    .ctrls button{
+      flex:1 1 0; margin:0;border-radius:5px;font-size:1em;padding:8px 0;
+      border:none;background:#666;color:#fff;
+      touch-action: manipulation;-webkit-tap-highlight-color:transparent;
+    }
+    @media(max-width:400px){
+      .container{max-width:98vw;}
+      #canvasWrap{max-width:98vw;height:69vw;}
+      .ctrls{max-width:98vw;}
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1>俄罗斯方块</h1>
+  <div id="score">分数: 0</div>
+  <div id="canvasWrap">
+    <canvas id="board" width="320" height="480"></canvas>
+    <div id="gameover" style="display:flex;flex-direction:column;">
+      <div>游戏结束</div>
+      <button class="btn" onclick="restart()">再来一局</button>
+    </div>
+  </div>
+  <div class="ctrls">
+    <button onclick="manualMove('left')">◀️左</button>
+    <button onclick="manualMove('rotate')">⟳旋转</button>
+    <button onclick="manualMove('right')">右▶️</button>
+    <button onclick="manualMove('down')">⬇️加速</button>
+  </div>
+  <div style="margin-top:10px;color:#aaa;font-size:0.98em;text-align:center;">
+    滑动/点击下面按钮，或用方向键/WASD操作
+  </div>
+</div>
+<script>
+const COLS=10, ROWS=20, BLOCK=32;
+const COLORS=["#eee","#33f","#e33","#ee0","#3a3","#e3e","#0dd","#e60"];
+const SHAPES=[[], [[1,1,1,1]], [[2,2,0],[0,2,2]], [[0,3,3],[3,3,0]], [[4,4,4],[0,4,0]], [[5,5,5],[5,0,0]], [[6,6,6],[0,0,6]], [[7,7],[7,7]]];
+let canvas = document.getElementById('board');
+let ctx = canvas.getContext('2d');
+let board,cur,curX,curY,curRot,lock,score=0,gameOver=false,timerID;
+function restart(){
+  document.getElementById('gameover').style.display='none';
+  init(); loop();
+}
+function init(){
+  board=Array.from({length:ROWS},()=>Array(COLS).fill(0));
+  score=0;gameOver=false; spawn();
+  updateScore();
+}
+function drawCell(x,y,c){
+  ctx.fillStyle=COLORS[c]||"#666";
+  ctx.fillRect(x*BLOCK+1,y*BLOCK+1,BLOCK-2,BLOCK-2);
+  ctx.strokeStyle="#222";
+  ctx.strokeRect(x*BLOCK+1,y*BLOCK+1,BLOCK-2,BLOCK-2);
+}
+function draw(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  // 固定方块
+  for(let y=0;y<ROWS;y++)
+    for(let x=0;x<COLS;x++)
+      if(board[y][x]) drawCell(x,y,board[y][x]);
+  // 当前方块
+  for(let y=0;y<cur.length;y++)
+    for(let x=0;x<cur[0].length;x++)
+      if(cur[y][x]) drawCell(curX+x,curY+y,cur[y][x]);
+}
+function collide(nx=0,ny=0,tryShape=cur){
+  for(let y=0;y<tryShape.length;y++)
+    for(let x=0;x<tryShape[0].length;x++)
+      if(tryShape[y][x]) {
+        let nx_ = curX+x+nx, ny_ = curY+y+ny;
+        if(nx_<0||nx_>=COLS||ny_>=ROWS) return true;
+        if(ny_>=0 && board[ny_][nx_]) return true;
+      }
+  return false;
+}
+function rotate(shape){
+  return shape[0].map((_,i)=>shape.map(row=>row[i]).reverse());
+}
+function fix(){
+  for(let y=0;y<cur.length;y++)
+    for(let x=0;x<cur[0].length;x++)
+      if(cur[y][x]&&curY+y>=0)board[curY+y][curX+x]=cur[y][x];
+  clearLines();
+  spawn();
+}
+function spawn(){
+  let idx = Math.floor(Math.random()*7)+1;
+  cur=SHAPES[idx].map(row=>row.slice());
+  curX=3;curY=-getTopPadding(cur);curRot=0;
+  if(collide()) {over();}
+}
+function clearLines(){
+  let add=0;
+  for(let y=ROWS-1;y>=0;y--) {
+    if(board[y].every(v=>v)) {
+      board.splice(y,1);board.unshift(Array(COLS).fill(0));
+      add++;
+      y++; // stay
+    }
+  }
+  if(add){
+    score+=Math.pow(2,add)*100;
+    updateScore();
+  }
+}
+function getTopPadding(shape){
+  let y=0;
+  while(y<shape.length&&shape[y].every(c=>!c)) y++;
+  return y;
+}
+function over(){
+  gameOver=true;
+  clearInterval(timerID);
+  document.getElementById('gameover').style.display='';
+}
+function updateScore(){
+  document.getElementById('score').textContent = '分数: ' + score;
+}
+function step(){
+  if(gameOver)return;
+  if(!collide(0,1)){
+    curY++;
+  }else{
+    fix();
+  }
+  draw();
+}
+function loop(){
+  draw();
+  timerID = setInterval(step,400);
+}
+function move(dx,dy){
+  if(!collide(dx,dy)){curX+=dx;curY+=dy;draw();}
+  else if(dy==1) { fix(); draw(); }
+}
+function hardDrop(){
+  while(!collide(0,1))curY++;
+  fix();draw();
+}
+function manualMove(cmd){
+  if(gameOver)return;
+  if(cmd==='left')move(-1,0);
+  if(cmd==='right')move(1,0);
+  if(cmd==='down')move(0,1);
+  if(cmd==='rotate'){
+    let r=rotate(cur);
+    if(!collide(0,0,r))cur=r;
+    else if(!collide(-1,0,r)) {curX--;cur=r;}
+    else if(!collide(1,0,r)) {curX++;cur=r;}
+    draw();
+  }
+}
+document.addEventListener('keydown',e=>{
+  if(gameOver)return;
+  if(e.key==='ArrowLeft'||e.key==='a') manualMove('left');
+  else if(e.key==='ArrowRight'||e.key==='d') manualMove('right');
+  else if(e.key==='ArrowDown'||e.key==='s') manualMove('down');
+  else if(e.key==='ArrowUp'||e.key==='w') manualMove('rotate');
+  else if(e.key===' '){ hardDrop(); }
+});
+let startX,startY;
+canvas.addEventListener('touchstart',e=>{
+  if(e.touches.length!=1)return;
+  startX=e.touches[0].clientX; startY=e.touches[0].clientY;
+}, { passive:false });
+canvas.addEventListener('touchend',e=>{
+  if(gameOver)return;
+  if(typeof startX!=="number")return;
+  let dx=e.changedTouches[0].clientX-startX;
+  let dy=e.changedTouches[0].clientY-startY;
+  if(Math.abs(dx)<15 && Math.abs(dy)<15){
+    manualMove('rotate');
+    startX=startY=null; return;
+  }
+  if(Math.abs(dx)>Math.abs(dy)){
+    if(dx>0) manualMove('right');
+    else manualMove('left');
+  }else{
+    if(dy>0) manualMove('down');
+  }
+  startX=startY=null;
+},{passive:false});
+init(); loop();
+</script>
+</body>
+</html>
