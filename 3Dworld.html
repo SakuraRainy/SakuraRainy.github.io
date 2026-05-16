@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8" />
+  <title>3D解密游戏示例</title>
+  <style>
+    html, body { margin: 0; padding: 0; width: 100vw; height: 100vh; overflow: hidden; background: #222; }
+    #overlay {
+      position: fixed; left: 0; top: 0; width: 100vw; height: 100vh;
+      display: none; align-items: center; justify-content: center;
+      background: rgba(0,0,0,0.6); z-index: 3; color: #fff; flex-direction: column;
+    }
+    #inputBox { font-size: 1.2em; margin-top: 15px; outline: none;}
+    #msg { font-size:1em; margin-top:12px;}
+    #win-message { color: yellow; font-size: 2.5em; position: fixed; z-index:4; width:100vw; text-align:center; top:20vh; left:0;}
+  </style>
+</head>
+<body>
+  <div id="overlay">
+    <div>输入密码以打开盒子</div>
+    <input id="inputBox" type="text" maxlength="8" autocomplete="off" />
+    <button onclick="submitAnswer()">解锁</button>
+    <div id="msg"></div>
+  </div>
+  <div id="win-message" style="display:none;">解谜成功，你胜利了！</div>
+  <!-- Three.js 与 OrbitControls 最新CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.154.0/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.154.0/examples/js/controls/OrbitControls.min.js"></script>
+  <script>
+let scene, camera, renderer, controls;
+let box, boxOpened = false;
+const boxPassword = "1234";
+let raycaster = new THREE.Raycaster();
+let mouse = new THREE.Vector2();
+
+function init() {
+  // 基本三维场景
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x2c3e50);
+  camera = new THREE.PerspectiveCamera(70, window.innerWidth/window.innerHeight, 0.1, 100);
+  camera.position.set(0, 2, 5);
+
+  renderer = new THREE.WebGLRenderer({antialias: true});
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setPixelRatio(window.devicePixelRatio);
+  document.body.insertBefore(renderer.domElement, document.body.firstChild);
+
+  // 控制器
+  controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true; controls.dampingFactor = 0.1;
+
+  // 地面
+  let floor = new THREE.Mesh(
+    new THREE.PlaneGeometry(10,10),
+    new THREE.MeshStandardMaterial({color: 0x808080})
+  );
+  floor.rotation.x = -Math.PI/2; floor.position.y = -0.01;
+  scene.add(floor);
+
+  // 墙
+  let wall = new THREE.Mesh(
+    new THREE.PlaneGeometry(10,5),
+    new THREE.MeshStandardMaterial({color: 0x505070})
+  );
+  wall.position.set(0,2.5,-5);
+  scene.add(wall);
+
+  // 箱子
+  box = new THREE.Mesh(
+    new THREE.BoxGeometry(1,1,1),
+    new THREE.MeshStandardMaterial({color: 0xBB7700})
+  );
+  box.position.set(0,0.5,0);
+  scene.add(box);
+
+  // 箱子锁
+  let lock = new THREE.Mesh(
+    new THREE.TorusGeometry(0.17,0.04,16,30,Math.PI),
+    new THREE.MeshStandardMaterial({color: 0x222222})
+  );
+  lock.position.set(0,0.62,0.51); lock.rotation.x = Math.PI/2;
+  box.add(lock);
+
+  // 灯光
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 0.7));
+  let point = new THREE.PointLight(0xffffff, 0.9);
+  point.position.set(3,7,3);
+  scene.add(point);
+
+  // 点击箱子判定
+  renderer.domElement.addEventListener('pointerdown', onPointerDown);
+  window.addEventListener('resize', resize);
+
+  animate();
+}
+
+function animate() {
+  requestAnimationFrame(animate);
+  controls.update();
+  renderer.render(scene, camera);
+}
+
+function resize() {
+  camera.aspect = window.innerWidth/window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+}
+
+function onPointerDown(event) {
+  if (boxOpened) return;
+  // 像素坐标->归一化
+  mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+  mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+  raycaster.setFromCamera(mouse, camera);
+  let intersects = raycaster.intersectObject(box, false);
+  if (intersects.length > 0) showOverlay();
+}
+
+// 显示密码输入
+function showOverlay() {
+  document.getElementById('overlay').style.display = 'flex';
+  document.getElementById('inputBox').value = '';
+  document.getElementById('msg').textContent = '';
+  setTimeout(()=>document.getElementById('inputBox').focus(),100);
+}
+
+window.submitAnswer = function () {
+  let val = document.getElementById('inputBox').value.trim();
+  if (val === boxPassword) openBox();
+  else document.getElementById('msg').textContent = "密码错误！";
+}
+
+function openBox() {
+  boxOpened = true;
+  document.getElementById('overlay').style.display = 'none';
+  // 添加箱盖动画
+  let lid = new THREE.Mesh(
+    new THREE.BoxGeometry(1,0.11,1),
+    new THREE.MeshStandardMaterial({color:0xEEC400})
+  );
+  lid.position.y = 0.55;
+  box.add(lid);
+  let t=0;
+  function lidAnim() {
+    if (t < Math.PI/2) {
+      lid.rotation.z = -t;
+      t += 0.05;
+      requestAnimationFrame(lidAnim);
+    } else showWin();
+  }
+  lidAnim();
+}
+
+function showWin() {
+  document.getElementById('win-message').style.display = 'block';
+}
+
+init();
+  </script>
+</body>
+</html>
