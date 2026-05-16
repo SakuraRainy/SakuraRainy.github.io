@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>炫酷多彩展示页</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <style>
+    html, body {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      font-family: 'Arial', 'Microsoft YaHei', sans-serif;
+    }
+    body {
+      /* 动态彩色渐变背景 */
+      position: relative;
+      min-height: 100vh;
+      background: linear-gradient(135deg, #667eea, #764ba2, #89f7fe, #43e97b);
+      background-size: 400% 400%;
+      animation: gradientMove 12s ease-in-out infinite;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    @keyframes gradientMove {
+      0% {background-position: 0% 50%;}
+      50% {background-position: 100% 50%;}
+      100% {background-position: 0% 50%;}
+    }
+
+    /* 霓虹文字 */
+    .neon-title {
+      color: #fff;
+      font-size: 56px;
+      text-shadow:
+        0 0 10px #00ffe7,
+        0 0 20px #00ffe7,
+        0 0 30px #00ffe7,
+        0 0 50px #4ee1ff,
+        0 0 80px #18ffff;
+      font-family: 'Arial Black', Arial, sans-serif;
+      letter-spacing: 8px;
+      margin-top: 38px;
+      margin-bottom: 25px;
+      text-align: center;
+      z-index: 2;
+      position: relative;
+      user-select: none;
+    }
+
+    /* 炫酷按钮 */
+    .cool-btn {
+      padding: 18px 54px;
+      font-size: 25px;
+      color: #fff;
+      border: none;
+      cursor: pointer;
+      outline: none;
+      border-radius: 33px;
+      background: linear-gradient(270deg, #ff0099, #493240, #00f2fe, #4e54c8);
+      background-size: 800% 800%;
+      animation: gradientBG 4.5s ease infinite;
+      box-shadow: 0 3px 18px rgba(255, 0, 153, 0.5);
+      margin: 33px auto 20px auto;
+      transition: transform .2s;
+      display: block;
+      z-index: 2;
+      position: relative;
+    }
+    .cool-btn:hover {
+      transform: scale(1.09) rotate(-3deg);
+      filter: brightness(1.12);
+    }
+    @keyframes gradientBG {
+      0% {background-position: 0% 50%;}
+      50% {background-position: 100% 50%;}
+      100% {background-position: 0% 50%;}
+    }
+
+    /* 登录框 */
+    .login-box {
+      background: rgba(255,255,255,0.13);
+      padding: 35px 26px 28px 26px;
+      border-radius: 17px;
+      box-shadow: 0 9px 31px 0 rgba(31, 38, 135, 0.37);
+      backdrop-filter: blur(14px);
+      border: 1.5px solid rgba(255,255,255,0.18);
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+      margin: 0 auto;
+      width: 300px;
+      z-index: 2;
+      position: relative;
+    }
+    .login-box input {
+      padding: 10px 16px;
+      border-radius: 9px;
+      border: 1px solid #667eea;
+      font-size: 17px;
+      outline: none;
+      background: rgba(240,245,255,0.7);
+      transition: border .2s;
+    }
+    .login-box input:focus {
+      border: 1.5px solid #5fe1fa;
+      box-shadow: 0 0 0 2px #c3f5ff8f;
+    }
+    .login-box button {
+      padding: 10px 0;
+      border: none;
+      border-radius: 8px;
+      background: #667eea;
+      color: #fff;
+      font-size: 20px;
+      cursor: pointer;
+      transition: background .19s;
+    }
+    .login-box button:hover {
+      background: #764ba2;
+    }
+
+    /* 粒子动画背景遮罩层, 让内容在粒子上面 */
+    #stars-canvas {
+      position: absolute;
+      left: 0; top: 0;
+      width: 100vw; height: 100vh;
+      z-index: 1;
+      display: block;
+      pointer-events: none;
+    }
+
+    /* 小设备适配 */
+    @media (max-width: 600px) {
+      .neon-title {font-size: 30px; letter-spacing:4px;}
+      .login-box {width: 90vw;}
+      .cool-btn {font-size: 17px; padding: 11px 27px;}
+    }
+
+  </style>
+</head>
+<body>
+  <!-- 星空粒子 canvas -->
+  <canvas id="stars-canvas"></canvas>
+
+  <!-- 炫酷内容 -->
+  <div class="neon-title">🌟炫酷多彩展示页🌟</div>
+  <button class="cool-btn" onclick="alert('你点击了炫酷按钮!')">点我体验炫酷</button>
+  <form class="login-box" onsubmit="event.preventDefault();alert('登录成功 😎');">
+    <input type="text" placeholder="用户名..." required>
+    <input type="password" placeholder="密码..." required>
+    <button type="submit">立即登录</button>
+  </form>
+
+  <!-- 星空粒子动画JS -->
+  <script>
+    // 星空背景动画
+    const canvas = document.getElementById("stars-canvas");
+    const ctx = canvas.getContext("2d");
+    let w = window.innerWidth, h = window.innerHeight;
+    let stars = [];
+    // 初始化星星
+    function initStars(num) {
+      stars = [];
+      for (let i = 0; i < num; i++) {
+        stars.push({
+          x: Math.random() * w,
+          y: Math.random() * h,
+          r: Math.random() * 1.2 + 0.2,
+          dx: (Math.random() - 0.5) * 0.07,
+          dy: (Math.random() - 0.5) * 0.07,
+          opacity: Math.random() * 0.7 + 0.2
+        });
+      }
+    }
+    function drawStars() {
+      ctx.clearRect(0, 0, w, h);
+      for (let i = 0; i < stars.length; i++) {
+        let s = stars[i];
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(255,255,255,${s.opacity})`;
+        ctx.shadowColor = "white";
+        ctx.shadowBlur = 8;
+        ctx.fill();
+        // 移动星星
+        s.x += s.dx;
+        s.y += s.dy;
+        if (s.x < 0) s.x = w;
+        if (s.x > w) s.x = 0;
+        if (s.y < 0) s.y = h;
+        if (s.y > h) s.y = 0;
+      }
+    }
+    function animateStars() {
+      drawStars();
+      requestAnimationFrame(animateStars);
+    }
+    function resizeCanvas() {
+      w = window.innerWidth;
+      h = window.innerHeight;
+      canvas.width = w; canvas.height = h;
+      initStars(Math.floor(w * h / 1800));
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+    animateStars();
+  </script>
+</body>
+</html>
