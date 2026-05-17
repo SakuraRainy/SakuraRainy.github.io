@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>黑暗神秘主页</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700&family=Roboto+Mono&display=swap" rel="stylesheet">
+  <style>
+    body {
+      min-height: 100vh;
+      margin: 0;
+      padding: 0;
+      background: radial-gradient(ellipse at center, #222 60%, #0a0a0f 100%);
+      color: #d1bfa7;
+      font-family: 'Roboto Mono', monospace;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      letter-spacing: 1px;
+      overflow: hidden;
+    }
+    .mystic-glow {
+      position: absolute;
+      top: 10%;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 400px;
+      height: 400px;
+      pointer-events: none;
+      border-radius: 50%;
+      filter: blur(90px);
+      background: radial-gradient(ellipse at center, rgba(136, 39, 255, 0.3) 10%, transparent 80%);
+      z-index: 0;
+    }
+    .container {
+      z-index: 1;
+      background: rgba(24, 17, 37, 0.88);
+      border: 1px solid rgba(107, 58, 255, 0.15);
+      border-radius: 16px;
+      box-shadow: 0 0 40px 4px rgba(72, 20, 180, 0.12);
+      padding: 50px 40px 40px 40px;
+      text-align: center;
+      position: relative;
+      min-width: 340px;
+      max-width: 96vw;
+      margin: 30px;
+    }
+    h1 {
+      font-family: 'Cinzel', serif;
+      font-size: 2.6em;
+      color: #bd93f9;
+      margin-bottom: 0.3em;
+      letter-spacing: 4px;
+      text-shadow: 0 0 10px #8be9fd44, 0 0 30px #282c3466;
+    }
+    .slogan {
+      font-size: 1.2em;
+      color: #8f77a7;
+      margin-bottom: 2em;
+      font-style: italic;
+      text-shadow: 0 0 8px #1a1e2d88, 0 0 20px #7c4dff22;
+    }
+    nav {
+      margin-bottom: 1.5em;
+    }
+    nav a {
+      display: inline-block;
+      padding: 0.5em 1.2em;
+      margin: 0 0.5em;
+      background: linear-gradient(90deg, #282a36 60%, #444681);
+      color: #e5e0ff;
+      text-decoration: none;
+      border-radius: 8px;
+      border: 1px solid #551db9;
+      font-family: 'Roboto Mono', monospace;
+      font-size: 1em;
+      box-shadow: 0 0 6px #4411e060;
+      transition: background 0.15s, transform 0.08s;
+    }
+    nav a:hover {
+      background: rgba(153, 21, 255, 0.22);
+      color: #f1eaff;
+      transform: scale(1.07);
+      box-shadow: 0 0 16px #551db944;
+    }
+    .mystical-divider {
+      margin: 30px auto;
+      width: 50%;
+      border: none;
+      border-top: 1.5px dashed #ab6efd90;
+      box-shadow: 0 2px 12px #b78fff22;
+    }
+    .footer {
+      margin-top: 2em;
+      color: #645079;
+      font-size: 0.98em;
+      opacity: 0.78;
+      letter-spacing: 2px;
+      text-shadow: 0 0 4px #551db922;
+    }
+    /* 神秘装饰小星点 */
+    .stars {
+      position: fixed;
+      width: 100vw; height: 100vh;
+      top: 0; left: 0; pointer-events: none; z-index: 0;
+      overflow: hidden;
+    }
+    .star {
+      position: absolute; background: #ce9fff; border-radius: 50%;
+      opacity: 0.55; width: 2px; height: 2px;
+      box-shadow: 0 0 7px #fff8, 0 0 20px #ab6efd66;
+      animation: twinkle 3s infinite alternate;
+    }
+    @keyframes twinkle {
+      from { opacity: 0.2; }
+      to   { opacity: 0.85; }
+    }
+  </style>
+  <script>
+    // 生成一些星点装饰
+    window.onload = function() {
+      const total = 42;
+      const container = document.querySelector('.stars');
+      for (let i = 0; i < total; i++) {
+        const star = document.createElement('div');
+        star.className = 'star';
+        star.style.left = Math.random() * 100 + 'vw';
+        star.style.top = Math.random() * 100 + 'vh';
+        star.style.width = star.style.height = (Math.random()*1.9 + 1) + 'px';
+        star.style.animationDelay = `${Math.random()*3}s`;
+        container.appendChild(star);
+      }
+    }
+  </script>
+</head>
+<body>
+  <div class="mystic-glow"></div>
+  <div class="stars"></div>
+  <div class="container">
+    <h1>幽影之境</h1>
+    <div class="slogan">暗夜低语，神秘觉醒</div>
+    <nav>
+      <a href="#">主页</a>
+      <a href="#">关于</a>
+      <a href="#">作品</a>
+      <a href="#">联系</a>
+    </nav>
+    <hr class="mystical-divider" />
+    <p style="max-width: 400px;margin:auto;line-height:1.7;">
+      欢迎来到神秘且深邃的空间。暗影之中，光芒悄然流转——在这里，每一个夜晚都可能诞生奇迹。
+    </p>
+  </div>
+  <div class="footer">
+    &copy; 2026 幽影工作室 | Designed by SakuraRainy
+  </div>
+</body>
+</html>
