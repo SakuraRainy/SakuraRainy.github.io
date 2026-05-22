@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>魔幻粒子</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { 
+            width: 100%; 
+            height: 100%; 
+            overflow: hidden; 
+            background: #000; 
+            touch-action: none;
+        }
+        canvas { 
+            display: block; 
+            width: 100vw; 
+            height: 100vh; 
+        }
+    </style>
+</head>
+<body>
+    <canvas id="c"></canvas>
+    <script>
+        const canvas = document.getElementById('c');
+        const ctx = canvas.getContext('2d', { alpha: false });
+        const dpr = window.devicePixelRatio || 1;
+        
+        let physW, physH;
+        function resize() {
+            physW = (window.innerWidth * dpr) | 0;
+            physH = (window.innerHeight * dpr) | 0;
+            canvas.width = physW;
+            canvas.height = physH;
+            canvas.style.width = window.innerWidth + 'px';
+            canvas.style.height = window.innerHeight + 'px';
+        }
+        resize();
+        window.addEventListener('resize', () => { resize(); init(); });
+        
+        const COUNT = 16384;
+        const TRAIL = 150; // 150像素尾迹
+        const FRICTION = 0.96;
+        
+        // 粒子数据
+        const px = new Float32Array(COUNT);
+        const py = new Float32Array(COUNT);
+        const vx = new Float32Array(COUNT);
+        const vy = new Float32Array(COUNT);
+        const ox = new Float32Array(COUNT); // 原始位置（用于空闲漂浮）
+        const oy = new Float32Array(COUNT);
+        const phase = new Float32Array(COUNT);
+        const color = new Uint32Array(COUNT);
+        
+        // 尾迹数据：150个历史位置
+        const trailX = new Float32Array(COUNT * TRAIL);
+        const trailY = new Float32Array(COUNT * TRAIL);
+        const trailIdx = new Uint16Array(COUNT); // 0-149
+        
+        // 多指触摸管理
+        const touches = new Map();
+        let touchArray = [];
+        
+        function updateTouchArray() {
+            touchArray = Array.from(touches.values());
+        }
+        
+        function init() {
+            for (let i = 0; i < COUNT; i++) {
+                px[i] = Math.random() * physW;
+                py[i] = Math.random() * physH;
+                ox[i] = px[i];
+                oy[i] = py[i];
+                phase[i] = Math.random() * Math.PI * 2;
+                trailIdx[i] = 0;
+                
+                // 随机鲜艳颜色
+                const hue = Math.random() * 360;
+                const sat = 80 + Math.random() * 20;
+                const light = 50 + Math.random() * 30;
+                color[i] = hslToUint32(hue, sat, light);
+                
+                const base = i * TRAIL;
+                for (let j = 0; j < TRAIL; j++) {
+                    trailX[base + j] = px[i];
+                    trailY[base + j] = py[i];
+                }
+            }
+        }
+        init();
+        
+        function hslToUint32(h, s, l) {
+            s /= 100; l /= 100;
+            const k = n => (n + h / 30) % 12;
+            const a = s * Math.min(l, 1 - l);
+            const f = n => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+            const r = (f(0) * 255) | 0;
+            const g = (f(8) * 255) | 0;
+            const b = (f(4) * 255) | 0;
+            return (0xFF << 24) | (b << 16) | (g << 8) | r;
+        }
+        
+        // 事件处理
+        function toPhysX(clientX) { return clientX * dpr; }
+        function toPhysY(clientY) { return clientY * dpr; }
+        
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            for (const t of e.changedTouches) {
+                touches.set(t.identifier, {
+                    x: toPhysX(t.clientX),
+                    y: toPhysY(t.clientY)
+                });
+            }
+            updateTouchArray();
+        }, { passive: false });
+        
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            for (const t of e.changedTouches) {
+                if (touches.has(t.identifier)) {
+                    touches.set(t.identifier, {
+                        x: toPhysX(t.clientX),
+                        y: toPhysY(t.clientY)
+                    });
+                }
+            }
+            updateTouchArray();
+        }, { passive: false });
+        
+        canvas.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            for (const t of e.changedTouches) {
+                const touch = touches.get(t.identifier);
+                if (touch) {
+                    explode(touch.x, touch.y);
+                    touches.delete(t.identifier);
+                }
+            }
+            updateTouchArray();
+        });
+        
+        canvas.addEventListener('touchcancel', (e) => {
+            e.preventDefault();
+            for (const t of e.changedTouches) {
+                touches.delete(t.identifier);
+            }
+            updateTouchArray();
+        });
+        
+        // 鼠标支持
+        let mouseActive = false;
+        let mouseX = 0, mouseY = 0;
+        
+        canvas.addEventListener('mousedown', (e) => {
+            mouseActive = true;
+            mouseX = toPhysX(e.clientX);
+            mouseY = toPhysY(e.clientY);
+            touches.set('mouse', { x: mouseX, y: mouseY });
+            updateTouchArray();
+        });
+        
+        canvas.addEventListener('mousemove', (e) => {
+            if (mouseActive) {
+                mouseX = toPhysX(e.clientX);
+                mouseY = toPhysY(e.clientY);
+                touches.set('mouse', { x: mouseX, y: mouseY });
+                updateTouchArray();
+            }
+        });
+        
+        canvas.addEventListener('mouseup', (e) => {
+            if (mouseActive) {
+                explode(mouseX, mouseY);
+                mouseActive = false;
+                touches.delete('mouse');
+                updateTouchArray();
+            }
+        });
+        
+        canvas.addEventListener('mouseleave', () => {
+            if (mouseActive) {
+                explode(mouseX, mouseY);
+                mouseActive = false;
+                touches.delete('mouse');
+                updateTouchArray();
+            }
+        });
+        
+        // 爆炸效果
+        const EXPLODE_SPEED = 18; // 高速弹开
+        const EXPLODE_RADIUS = 400;
+        
+        function explode(ex, ey) {
+            for (let i = 0; i < COUNT; i++) {
+                const dx = px[i] - ex;
+                const dy = py[i] - ey;
+                const distSq = dx*dx + dy*dy;
+                
+                if (distSq < EXPLODE_RADIUS * EXPLODE_RADIUS && distSq > 0.1) {
+                    const dist = Math.sqrt(distSq);
+                    const speed = EXPLODE_SPEED * (0.5 + 0.5 * (1 - dist / EXPLODE_RADIUS));
+                    
+                    vx[i] += (dx / dist) * speed;
+                    vy[i] += (dy / dist) * speed;
+                }
+            }
+        }
+        
+        // 渲染缓冲区
+        let imgData = ctx.createImageData(physW, physH);
+        let pixels = new Uint32Array(imgData.data.buffer);
+        
+        function update() {
+            const hasInput = touchArray.length > 0;
+            const ATTRACT = 0.3;
+            const FLOAT = 0.015;
+            
+            if (hasInput) {
+                for (let i = 0; i < COUNT; i++) {
+                    // 找最近的手指
+                    let minDistSq = Infinity;
+                    let nearestX = 0, nearestY = 0;
+                    
+                    for (const t of touchArray) {
+                        const dx = t.x - px[i];
+                        const dy = t.y - py[i];
+                        const distSq = dx*dx + dy*dy;
+                        if (distSq < minDistSq) {
+                            minDistSq = distSq;
+                            nearestX = t.x;
+                            nearestY = t.y;
+                        }
+                    }
+                    
+                    const dist = Math.sqrt(minDistSq) + 1;
+                    const force = ATTRACT * (1 + 400 / dist);
+                    
+                    vx[i] += (nearestX - px[i]) / dist * force;
+                    vy[i] += (nearestY - py[i]) / dist * force;
+                    vx[i] *= 0.88;
+                    vy[i] *= 0.88;
+                    
+                    px[i] += vx[i];
+                    py[i] += vy[i];
+                    
+                    // 边缘循环
+                    if (px[i] < 0) px[i] = physW; else if (px[i] > physW) px[i] = 0;
+                    if (py[i] < 0) py[i] = physH; else if (py[i] > physH) py[i] = 0;
+                    
+                    // 写入尾迹
+                    const tIdx = trailIdx[i];
+                    const base = i * TRAIL;
+                    trailX[base + tIdx] = px[i];
+                    trailY[base + tIdx] = py[i];
+                    trailIdx[i] = (tIdx + 1) % TRAIL;
+                }
+            } else {
+                for (let i = 0; i < COUNT; i++) {
+                    phase[i] += 0.02;
+                    // 柔和漂浮：向原始位置回归 + 正弦波动
+                    vx[i] += (ox[i] - px[i]) * 0.001 + Math.cos(phase[i]) * FLOAT;
+                    vy[i] += (oy[i] - py[i]) * 0.001 + Math.sin(phase[i]) * FLOAT;
+                    vx[i] *= FRICTION;
+                    vy[i] *= FRICTION;
+                    
+                    px[i] += vx[i];
+                    py[i] += vy[i];
+                    
+                    // 边缘循环
+                    if (px[i] < 0) px[i] = physW; else if (px[i] > physW) px[i] = 0;
+                    if (py[i] < 0) py[i] = physH; else if (py[i] > physH) py[i] = 0;
+                    
+                    // 写入尾迹
+                    const tIdx = trailIdx[i];
+                    const base = i * TRAIL;
+                    trailX[base + tIdx] = px[i];
+                    trailY[base + tIdx] = py[i];
+                    trailIdx[i] = (tIdx + 1) % TRAIL;
+                }
+            }
+        }
+        
+        function draw() {
+            pixels.fill(0xFF000000);
+            
+            const w = physW;
+            
+            for (let i = 0; i < COUNT; i++) {
+                const col = color[i];
+                const currIdx = trailIdx[i];
+                const base = i * TRAIL;
+                
+                // 绘制150px发光尾迹
+                for (let j = 0; j < TRAIL; j++) {
+                    const readIdx = (currIdx + j) % TRAIL;
+                    const tx = trailX[base + readIdx] | 0;
+                    const ty = trailY[base + readIdx] | 0;
+                    
+                    if (tx >= 0 && tx < w && ty >= 0 && ty < physH) {
+                        // 渐变透明度：从透明(0.02)到不透明(1.0)
+                        const alpha = 0.02 + (j / TRAIL) * 0.98;
+                        const a = alpha * 255 | 0;
+                        
+                        const r = ((col & 0xFF) * a) >> 8;
+                        const g = (((col >> 8) & 0xFF) * a) >> 8;
+                        const b = (((col >> 16) & 0xFF) * a) >> 8;
+                        
+                        pixels[ty * w + tx] = (0xFF << 24) | (b << 16) | (g << 8) | r;
+                    }
+                }bu
+                
+                // 绘制本体（最亮）
+                const cx = px[i] | 0;
+                const cy = py[i] | 0;
+                if (cx >= 0 && cx < w && cy >= 0 && cy < physH) {
+                    pixels[cy * w + cx] = col;
+                }
+            }
+            
+            ctx.putImageData(imgData, 0, 0);
+        }
+        
+        function loop() {
+            update();
+            draw();
+            requestAnimationFrame(loop);
+        }
+        loop();
+    </script>
+</body>
+</html>
