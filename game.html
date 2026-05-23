@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>正在跳转...</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            height: 100vh;
+            width: 100vw;
+            background: linear-gradient(135deg, #7c3aed 0%, #3b82f6 50%, #2563eb 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif;
+        }
+        
+        .message {
+            color: #ffffff;
+            font-size: 24px;
+            font-weight: 500;
+            text-align: center;
+            text-shadow: 0 2px 8px rgba(0, 0, 0, 0.15), 0 1px 3px rgba(0, 0, 0, 0.1);
+            letter-spacing: 0.8px;
+            padding: 0 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="message">正在为您跳转到Poki游戏世界...</div>
+    
+    <script>
+        window.location.replace('https://poki.com');
+    </script>
+</body>
+</html>
