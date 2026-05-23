@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>宇宙粒子</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { width: 100%; height: 100%; overflow: hidden; background: #000; }
+        canvas { display: block; width: 100vw; height: 100vh; image-rendering: pixelated; touch-action: none; }
+    </style>
+</head>
+<body>
+    <canvas id="c"></canvas>
+    <script>
+        const canvas = document.getElementById('c');
+        const ctx = canvas.getContext('2d', { alpha: false });
+        const dpr = window.devicePixelRatio || 1;
+        
+        let physW, physH;
+        function resize() {
+            physW = (window.innerWidth * dpr) | 0;
+            physH = (window.innerHeight * dpr) | 0;
+            canvas.width = physW;
+            canvas.height = physH;
+            canvas.style.width = window.innerWidth + 'px';
+            canvas.style.height = window.innerHeight + 'px';
+        }
+        resize();
+        window.addEventListener('resize', () => { resize(); init(); });
+        
+        const COUNT = 12000;
+        const TRAIL = 80;
+        
+        const px = new Float32Array(COUNT);
+        const py = new Float32Array(COUNT);
+        const vx = new Float32Array(COUNT);
+        const vy = new Float32Array(COUNT);
+        const mass = new Float32Array(COUNT);
+        const color = new Uint32Array(COUNT);
+        const glowColor = new Uint32Array(COUNT);
+        
+        const trailX = new Float32Array(COUNT * TRAIL);
+        const trailY = new Float32Array(COUNT * TRAIL);
+        const trailIdx = new Uint16Array(COUNT);
+        
+        function nebulaColor() {
+            const type = Math.random();
+            let r, g, b;
+            if (type < 0.25) {
+                r = 80 + Math.random() * 100;
+                g = 100 + Math.random() * 80;
+                b = 200 + Math.random() * 55;
+            } else if (type < 0.5) {
+                r = 220 + Math.random() * 35;
+                g = 150 + Math.random() * 80;
+                b = 50 + Math.random() * 60;
+            } else if (type < 0.75) {
+                r = 220 + Math.random() * 35;
+                g = 180 + Math.random() * 60;
+                b = 200 + Math.random() * 55;
+            } else {
+                r = 150 + Math.random() * 50;
+                g = 220 + Math.random() * 35;
+                b = 220 + Math.random() * 35;
+            }
+            return [r | 0, g | 0, b | 0];
+        }
+        
+        const touches = new Map();
+        let touchArray = [];
+        
+        function updateTouchArray() {
+            touchArray = Array.from(touches.values());
+        }
+        
+        function init() {
+            for (let i = 0; i < COUNT; i++) {
+                px[i] = Math.random() * physW;
+                py[i] = Math.random() * physH;
+                mass[i] = 0.3 + Math.random() * 0.7;
+                
+                const dx = px[i] - physW/2;
+                const dy = py[i] - physH/2;
+                const angle = Math.atan2(dy, dx);
+                const orbitalSpeed = 0.5 + Math.random() * 0.5;
+                
+                vx[i] = -Math.sin(angle) * orbitalSpeed * (0.5 + Math.random());
+                vy[i] = Math.cos(angle) * orbitalSpeed * (0.5 + Math.random());
+                
+                trailIdx[i] = 0;
+                
+                const [r, g, b] = nebulaColor();
+                color[i] = (0xFF000000 | (b << 16) | (g << 8) | r) >>> 0;
+                
+                const glowR = Math.min(255, r * 1.5);
+                const glowG = Math.min(255, g * 1.5);
+                const glowB = Math.min(255, b * 1.5);
+                glowColor[i] = (0xFF000000 | (glowB << 16) | (glowG << 8) | glowR) >>> 0;
+                
+                const base = i * TRAIL;
+                for (let j = 0; j < TRAIL; j++) {
+                    trailX[base + j] = px[i];
+                    trailY[base + j] = py[i];
+                }
+            }
+        }
+        init();
+        
+        function toPhysX(clientX) { return clientX * dpr; }
+        function toPhysY(clientY) { return clientY * dpr; }
+        
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            for (const t of e.changedTouches) {
+                touches.set(t.identifier, { x: toPhysX(t.clientX), y: toPhysY(t.clientY) });
+            }
+            updateTouchArray();
+        }, { passive: false });
+        
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            for (const t of e.changedTouches) {
+                if (touches.has(t.identifier)) {
+                    touches.set(t.identifier, { x: toPhysX(t.clientX), y: toPhysY(t.clientY) });
+                }
+            }
+            updateTouchArray();
+        }, { passive: false });
+        
+        canvas.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            for (const t of e.changedTouches) {
+                const touch = touches.get(t.identifier);
+                if (touch) {
+                    supernova(touch.x, touch.y);
+                    touches.delete(t.identifier);
+                }
+            }
+            updateTouchArray();
+        });
+        
+        canvas.addEventListener('touchcancel', (e) => {
+            e.preventDefault();
+            for (const t of e.changedTouches) touches.delete(t.identifier);
+            updateTouchArray();
+        });
+        
+        let mouseActive = false;
+        let mouseX = 0, mouseY = 0;
+        
+        canvas.addEventListener('mousedown', (e) => {
+            mouseActive = true;
+            mouseX = toPhysX(e.clientX);
+            mouseY = toPhysY(e.clientY);
+            touches.set('mouse', { x: mouseX, y: mouseY });
+            updateTouchArray();
+        });
+        
+        canvas.addEventListener('mousemove', (e) => {
+            if (mouseActive) {
+                mouseX = toPhysX(e.clientX);
+                mouseY = toPhysY(e.clientY);
+                touches.set('mouse', { x: mouseX, y: mouseY });
+                updateTouchArray();
+            }
+        });
+        
+        canvas.addEventListener('mouseup', (e) => {
+            if (mouseActive) {
+                supernova(mouseX, mouseY);
+                mouseActive = false;
+                touches.delete('mouse');
+                updateTouchArray();
+            }
+        });
+        
+        canvas.addEventListener('mouseleave', () => {
+            if (mouseActive) {
+                supernova(mouseX, mouseY);
+                mouseActive = false;
+                touches.delete('mouse');
+                updateTouchArray();
+            }
+        });
+        
+        const SUPERNOVA_RADIUS = 500;
+        const SUPERNOVA_FORCE = 25;
+        
+        function supernova(sx, sy) {
+            for (let i = 0; i < COUNT; i++) {
+                const dx = px[i] - sx;
+                const dy = py[i] - sy;
+                const distSq = dx*dx + dy*dy;
+                
+                if (distSq < SUPERNOVA_RADIUS * SUPERNOVA_RADIUS && distSq > 0.1) {
+                    const dist = Math.sqrt(distSq);
+                    const force = SUPERNOVA_FORCE * (1 - dist / SUPERNOVA_RADIUS) * (0.5 + mass[i]);
+                    vx[i] += (dx / dist) * force;
+                    vy[i] += (dy / dist) * force;
+                }
+            }
+        }
+        
+        let imgData = ctx.createImageData(physW, physH);
+        let pixels = new Uint32Array(imgData.data.buffer);
+        let bgInitialized = false;
+        
+        function drawNebulaBackground() {
+            if (!bgInitialized) {
+                for (let i = 0; i < physW * physH; i++) {
+                    const x = i % physW;
+                    const y = (i / physW) | 0;
+                    const dx = x - physW/2;
+                    const dy = y - physH/2;
+                    const dist = Math.sqrt(dx*dx + dy*dy);
+                    const maxDist = Math.sqrt(physW*physW + physH*physH) / 2;
+                    const fade = 1 - (dist / maxDist);
+                    
+                    if (Math.random() < 0.0003 * fade) {
+                        const intensity = (5 + Math.random() * 10) | 0;
+                        pixels[i] = (0xFF000000 | (intensity << 16) | (intensity*0.8 << 8) | (intensity*0.5)) >>> 0;
+                    }
+                }
+                bgInitialized = true;
+            }
+        }
+        
+        function update() {
+            const hasInput = touchArray.length > 0;
+            const G = 0.15;
+            
+            if (hasInput) {
+                for (let i = 0; i < COUNT; i++) {
+                    let minDistSq = Infinity;
+                    let nearestX = 0, nearestY = 0;
+                    
+                    for (const t of touchArray) {
+                        const dx = t.x - px[i];
+                        const dy = t.y - py[i];
+                        const distSq = dx*dx + dy*dy;
+                        if (distSq < minDistSq) {
+                            minDistSq = distSq;
+                            nearestX = t.x;
+                            nearestY = t.y;
+                        }
+                    }
+                    
+                    const dist = Math.sqrt(minDistSq) + 1;
+                    const force = G * mass[i] * (1 + 1000 / dist);
+                    
+                    vx[i] += (nearestX - px[i]) / dist * force;
+                    vy[i] += (nearestY - py[i]) / dist * force;
+                    vx[i] *= 0.92;
+                    vy[i] *= 0.92;
+                    
+                    px[i] += vx[i];
+                    py[i] += vy[i];
+                    
+                    if (px[i] < 0) px[i] = physW; else if (px[i] > physW) px[i] = 0;
+                    if (py[i] < 0) py[i] = physH; else if (py[i] > physH) py[i] = 0;
+                    
+                    const tIdx = trailIdx[i];
+                    const base = i * TRAIL;
+                    trailX[base + tIdx] = px[i];
+                    trailY[base + tIdx] = py[i];
+                    trailIdx[i] = (tIdx + 1) % TRAIL;
+                }
+            } else {
+                for (let i = 0; i < COUNT; i++) {
+                    const dx = px[i] - physW/2;
+                    const dy = py[i] - physH/2;
+                    const dist = Math.sqrt(dx*dx + dy*dy) + 1;
+                    
+                    const toCenter = 0.0005 * mass[i];
+                    vx[i] -= (dx / dist) * toCenter;
+                    vy[i] -= (dy / dist) * toCenter;
+                    
+                    vx[i] += (Math.random() - 0.5) * 0.02;
+                    vy[i] += (Math.random() - 0.5) * 0.02;
+                    
+                    vx[i] *= 0.995;
+                    vy[i] *= 0.995;
+                    
+                    px[i] += vx[i];
+                    py[i] += vy[i];
+                    
+                    if (px[i] < 0) px[i] = physW; else if (px[i] > physW) px[i] = 0;
+                    if (py[i] < 0) py[i] = physH; else if (py[i] > physH) py[i] = 0;
+                    
+                    const tIdx = trailIdx[i];
+                    const base = i * TRAIL;
+                    trailX[base + tIdx] = px[i];
+                    trailY[base + tIdx] = py[i];
+                    trailIdx[i] = (tIdx + 1) % TRAIL;
+                }
+            }
+        }
+        
+        function draw() {
+            for (let i = 0; i < pixels.length; i++) {
+                const col = pixels[i];
+                if (col !== 0xFF000000) {
+                    const r = (col & 0xFF) * 0.15;
+                    const g = ((col >> 8) & 0xFF) * 0.15;
+                    const b = ((col >> 16) & 0xFF) * 0.15;
+                    pixels[i] = (0xFF000000 | ((b | 0) << 16) | ((g | 0) << 8) | (r | 0)) >>> 0;
+                }
+            }
+            
+            drawNebulaBackground();
+            
+            const w = physW;
+            
+            for (let i = 0; i < COUNT; i++) {
+                const m = mass[i];
+                const col = color[i];
+                const glow = glowColor[i];
+                const currIdx = trailIdx[i];
+                const base = i * TRAIL;
+                
+                for (let j = 0; j < TRAIL; j++) {
+                    const readIdx = (currIdx + j) % TRAIL;
+                    const tx = trailX[base + readIdx] | 0;
+                    const ty = trailY[base + readIdx] | 0;
+                    
+                    if (tx >= 0 && tx < w && ty >= 0 && ty < physH) {
+                        const progress = j / TRAIL;
+                        const alpha = progress * progress * 0.6 * m;
+                        const a = alpha * 255 | 0;
+                        
+                        const r = ((col & 0xFF) * a) >> 8;
+                        const g = (((col >> 8) & 0xFF) * a) >> 8;
+                        const b = (((col >> 16) & 0xFF) * a) >> 8;
+                        
+                        const idx = ty * w + tx;
+                        const existing = pixels[idx];
+                        
+                        const er = existing & 0xFF;
+                        const eg = (existing >> 8) & 0xFF;
+                        const eb = (existing >> 16) & 0xFF;
+                        
+                        pixels[idx] = (0xFF000000 | 
+                            (Math.min(255, eb + b) << 16) | 
+                            (Math.min(255, eg + g) << 8) | 
+                            (Math.min(255, er + r))) >>> 0;
+                    }
+                }
+                
+                const cx = px[i] | 0;
+                const cy = py[i] | 0;
+                if (cx >= 0 && cx < w && cy >= 0 && cy < physH) {
+                    if (m > 0.7) {
+                        for (let oy = -1; oy <= 1; oy++) {
+                            for (let ox = -1; ox <= 1; ox++) {
+                                const nx = cx + ox;
+                                const ny = cy + oy;
+                                if (nx >= 0 && nx < w && ny >= 0 && ny < physH) {
+                                    const nIdx = ny * w + nx;
+                                    const intensity = (ox === 0 && oy === 0) ? 1.0 : 0.3;
+                                    const r = ((glow & 0xFF) * intensity) | 0;
+                                    const g = (((glow >> 8) & 0xFF) * intensity) | 0;
+                                    const b = (((glow >> 16) & 0xFF) * intensity) | 0;
+                                    
+                                    const existing = pixels[nIdx];
+                                    const er = existing & 0xFF;
+                                    const eg = (existing >> 8) & 0xFF;
+                                    const eb = (existing >> 16) & 0xFF;
+                                    
+                                    pixels[nIdx] = (0xFF000000 | 
+                                        (Math.min(255, eb + b) << 16) | 
+                                        (Math.min(255, eg + g) << 8) | 
+                                        (Math.min(255, er + r))) >>> 0;
+                                }
+                            }
+                        }
+                    } else {
+                        pixels[cy * w + cx] = glow;
+                    }
+                }
+            }
+            
+            ctx.putImageData(imgData, 0, 0);
+        }
+        
+        function loop() {
+            update();
+            draw();
+            requestAnimationFrame(loop);
+        }
+        loop();
+    </script>
+</body>
+</html>
