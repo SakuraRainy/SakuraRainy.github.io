@@ -1,0 +1,939 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>粒子沙盒</title>
+    <style>
+        *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none}
+        html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','Helvetica Neue',sans-serif;-webkit-font-smoothing:antialiased}
+        canvas{display:block;width:100vw;height:100vh;image-rendering:pixelated;touch-action:none}
+
+        #fps{
+            position:fixed;top:14px;left:14px;
+            background:rgba(28,28,30,0.55);
+            backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);
+            color:rgba(255,255,255,0.7);font-size:12px;font-weight:600;
+            padding:5px 10px;border-radius:7px;z-index:200;pointer-events:none;
+            letter-spacing:.3px;font-variant-numeric:tabular-nums;
+            border:.5px solid rgba(255,255,255,0.08);
+        }
+        #renderer{
+            position:fixed;top:14px;left:88px;
+            background:rgba(28,28,30,0.55);
+            backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);
+            font-size:10px;font-weight:700;letter-spacing:.5px;
+            padding:5px 8px;border-radius:7px;z-index:200;pointer-events:none;
+            border:.5px solid rgba(255,255,255,0.08);
+        }
+        #renderer.gl{color:#30D158}
+        #renderer.cpu{color:#FF9500}
+
+        #settingsBtn{
+            position:fixed;top:10px;right:10px;width:40px;height:40px;
+            border-radius:50%;border:.5px solid rgba(255,255,255,0.1);
+            background:rgba(28,28,30,0.55);
+            backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);
+            color:rgba(255,255,255,0.85);cursor:pointer;z-index:200;
+            display:flex;align-items:center;justify-content:center;
+            transition:transform .35s cubic-bezier(.32,.72,0,1),background .15s;
+        }
+        #settingsBtn:active{background:rgba(28,28,30,0.85)}
+        #settingsBtn.open svg{transform:rotate(75deg)}
+        #settingsBtn svg{transition:transform .4s cubic-bezier(.32,.72,0,1)}
+
+        #overlay{position:fixed;inset:0;background:rgba(0,0,0,0.45);opacity:0;pointer-events:none;transition:opacity .35s cubic-bezier(.32,.72,0,1);z-index:300}
+        #overlay.show{opacity:1;pointer-events:auto}
+
+        #panel{
+            position:fixed;top:0;right:0;width:min(330px,86vw);height:100%;
+            background:rgba(22,22,24,0.88);
+            backdrop-filter:blur(60px) saturate(210%);-webkit-backdrop-filter:blur(60px) saturate(210%);
+            transform:translateX(100%);
+            transition:transform .42s cubic-bezier(.32,.72,0,1);
+            z-index:400;display:flex;flex-direction:column;overflow:hidden;
+            border-left:.5px solid rgba(255,255,255,0.06);
+        }
+        #panel.open{transform:translateX(0)}
+
+        .panel-header{padding:56px 22px 8px;flex-shrink:0}
+        .panel-title{font-size:34px;font-weight:700;color:#fff;letter-spacing:-.8px}
+
+        .panel-body{flex:1;overflow-y:auto;padding:0 16px 50px;-webkit-overflow-scrolling:touch}
+        .panel-body::-webkit-scrollbar{display:none}
+
+        .section-label{font-size:13px;font-weight:500;color:rgba(255,255,255,0.4);text-transform:uppercase;padding:22px 6px 7px;letter-spacing:.6px}
+
+        .card{background:rgba(120,120,128,0.18);border-radius:12px;padding:12px 14px;margin-bottom:6px}
+
+        .row{display:flex;align-items:center;justify-content:space-between;min-height:30px}
+        .row-label{font-size:16px;color:#fff;font-weight:400}
+        .row-value{font-size:15px;color:rgba(255,255,255,0.4);font-weight:400;font-variant-numeric:tabular-nums;min-width:52px;text-align:right}
+        .row+.slider-wrap{margin-top:2px}
+        .slider-wrap{padding:6px 0 2px}
+
+        .ios-slider{position:relative;height:28px;display:flex;align-items:center;touch-action:none;user-select:none;-webkit-user-select:none}
+        .ios-slider-track{position:absolute;left:0;right:0;height:4px;background:rgba(255,255,255,0.12);border-radius:2px}
+        .ios-slider-fill{position:absolute;left:0;height:4px;background:#0A84FF;border-radius:2px;pointer-events:none}
+        .ios-slider-thumb{position:absolute;width:28px;height:28px;border-radius:50%;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.28),0 0 0 .5px rgba(0,0,0,.06);top:50%;transform:translateY(-50%);cursor:grab;transition:transform .1s,box-shadow .1s}
+        .ios-slider-thumb.dragging{transform:translateY(-50%) scale(1.18);box-shadow:0 2px 10px rgba(0,0,0,.35),0 0 0 .5px rgba(0,0,0,.04);cursor:grabbing}
+
+        .ios-toggle{width:51px;height:31px;border-radius:15.5px;background:#39393D;position:relative;cursor:pointer;flex-shrink:0;transition:background .28s cubic-bezier(.32,.72,0,1)}
+        .ios-toggle.on{background:#30D158}
+        .ios-toggle-knob{width:27px;height:27px;border-radius:50%;background:#fff;position:absolute;top:2px;left:2px;box-shadow:0 1px 3px rgba(0,0,0,.22),0 0 0 .5px rgba(0,0,0,.04);transition:transform .28s cubic-bezier(.32,.72,0,1)}
+        .ios-toggle.on .ios-toggle-knob{transform:translateX(20px)}
+
+        .seg-ctrl{display:flex;background:rgba(120,120,128,0.24);border-radius:8px;padding:2px;margin-top:4px}
+        .seg{flex:1;text-align:center;padding:6px 0;font-size:13px;font-weight:500;color:rgba(255,255,255,0.55);border-radius:7px;cursor:pointer;transition:background .25s,color .25s;user-select:none;-webkit-user-select:none}
+        .seg.active{background:rgba(255,255,255,0.18);color:#fff}
+
+        .scheme-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:6px 0 2px}
+        .scheme-item{display:flex;flex-direction:column;align-items:center;gap:5px;cursor:pointer}
+        .scheme-item:active .scheme-bar{transform:scale(.94)}
+        .scheme-bar{width:100%;height:30px;border-radius:8px;overflow:hidden;display:flex;border:2.5px solid transparent;transition:border-color .2s,transform .12s}
+        .scheme-bar.active{border-color:#0A84FF}
+        .scheme-swatch{flex:1;height:100%}
+        .scheme-label{font-size:11px;color:rgba(255,255,255,0.45);font-weight:500}
+
+        .disabled{opacity:.3;pointer-events:none;transition:opacity .25s}
+
+        .btn-row{display:flex;gap:8px;margin-top:20px}
+        .action-btn{flex:1;padding:13px;border:none;border-radius:12px;background:rgba(10,132,255,0.15);color:#0A84FF;font-size:16px;font-weight:500;cursor:pointer;transition:background .15s,transform .12s;font-family:inherit}
+        .action-btn:active{background:rgba(10,132,255,0.25);transform:scale(.97)}
+        .action-btn.paused{background:rgba(255,149,0,0.15);color:#FF9500}
+        .action-btn.paused:active{background:rgba(255,149,0,0.25)}
+        .reset-btn{width:100%;padding:13px;border:none;border-radius:12px;background:rgba(255,69,58,0.12);color:#FF453A;font-size:16px;font-weight:500;cursor:pointer;transition:background .15s,transform .12s;font-family:inherit;margin-top:8px}
+        .reset-btn:active{background:rgba(255,69,58,0.22);transform:scale(.97)}
+
+        @media(prefers-reduced-motion:reduce){*{transition-duration:.01ms!important;animation-duration:.01ms!important}}
+    </style>
+</head>
+<body>
+    <canvas id="c"></canvas>
+    <div id="fps">-- FPS</div>
+    <div id="renderer"></div>
+    <button id="settingsBtn" aria-label="打开设置">
+        <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
+            <circle cx="12" cy="12" r="3"/>
+        </svg>
+    </button>
+    <div id="overlay"></div>
+    <div id="panel" role="dialog" aria-label="设置面板">
+        <div class="panel-header"><span class="panel-title">设置</span></div>
+        <div class="panel-body">
+            <div class="section-label">粒子</div>
+            <div class="card">
+                <div class="row"><span class="row-label">数量</span><span class="row-value" id="countVal">16384</span></div>
+                <div class="slider-wrap" id="countSlider"></div>
+                <div class="row"><span class="row-label">粒子大小</span><span class="row-value" id="sizeVal">1</span></div>
+                <div class="slider-wrap" id="sizeSlider"></div>
+            </div>
+            <div class="section-label">拖影</div>
+            <div class="card">
+                <div class="row"><span class="row-label">拖影效果</span><div id="trailToggle"></div></div>
+                <div id="trailLenSection">
+                    <div class="row"><span class="row-label">拖影长度</span><span class="row-value" id="trailLenVal">15</span></div>
+                    <div class="slider-wrap" id="trailLenSlider"></div>
+                </div>
+            </div>
+            <div class="section-label">物理</div>
+            <div class="card">
+                <div class="row"><span class="row-label">交互模式</span></div>
+                <div class="seg-ctrl" id="modeCtrl"><div class="seg active" data-val="attract">吸引</div><div class="seg" data-val="repel">排斥</div></div>
+                <div style="height:8px"></div>
+                <div class="row"><span class="row-label">力度</span><span class="row-value" id="attractVal">0.15</span></div>
+                <div class="slider-wrap" id="attractSlider"></div>
+                <div class="row"><span class="row-label">爆炸力度</span><span class="row-value" id="explodeVal">15</span></div>
+                <div class="slider-wrap" id="explodeSlider"></div>
+                <div class="row"><span class="row-label">浮动强度</span><span class="row-value" id="floatVal">0.015</span></div>
+                <div class="slider-wrap" id="floatSlider"></div>
+                <div class="row"><span class="row-label">重力</span><span class="row-value" id="gravityVal">0.00</span></div>
+                <div class="slider-wrap" id="gravitySlider"></div>
+                <div class="row"><span class="row-label">阻尼</span><span class="row-value" id="dampVal">0.985</span></div>
+                <div class="slider-wrap" id="dampSlider"></div>
+                <div style="height:8px"></div>
+                <div class="row"><span class="row-label">边界模式</span></div>
+                <div class="seg-ctrl" id="boundaryCtrl"><div class="seg active" data-val="wrap">环绕</div><div class="seg" data-val="bounce">反弹</div></div>
+            </div>
+            <div class="section-label">颜色方案</div>
+            <div class="card"><div class="scheme-grid" id="schemeGrid"></div></div>
+            <div class="section-label">显示</div>
+            <div class="card">
+                <div class="row"><span class="row-label">背景亮度</span><span class="row-value" id="bgVal">0</span></div>
+                <div class="slider-wrap" id="bgSlider"></div>
+            </div>
+            <div class="btn-row">
+                <button class="action-btn" id="pauseBtn">暂停</button>
+                <button class="action-btn" id="shuffleBtn">打乱</button>
+            </div>
+            <button class="reset-btn" id="resetBtn">重置所有设置</button>
+        </div>
+    </div>
+
+    <script>
+    /* ================================================================
+       渲染器选择：优先 WebGL2，失败回退 CPU ImageData
+       ================================================================ */
+    let canvas = document.getElementById('c');
+    const dpr = window.devicePixelRatio || 1;
+    const rendEl = document.getElementById('renderer');
+
+    let useGL = false, gl = null, ctx = null;
+
+    /* 尝试 WebGL2 */
+    try {
+        gl = canvas.getContext('webgl2', {
+            alpha: false,
+            antialias: false,
+            preserveDrawingBuffer: true
+        });
+        if (gl) useGL = true;
+    } catch (e) {}
+
+    if (!useGL) {
+        /* WebGL2 不可用，直接回退 2D（canvas 未被占用） */
+        ctx = canvas.getContext('2d', { alpha: false });
+        rendEl.textContent = 'CPU';
+        rendEl.className = 'cpu';
+    } else {
+        rendEl.textContent = 'WEBGL2';
+        rendEl.className = 'gl';
+    }
+
+    /* ================================================================
+       尺寸管理
+       ================================================================ */
+    let cssW, cssH, physW, physH;
+    let imgData, pixels;
+
+    function resize() {
+        cssW = window.innerWidth;
+        cssH = window.innerHeight;
+        physW = (cssW * dpr) | 0;
+        physH = (cssH * dpr) | 0;
+        canvas.width = physW;
+        canvas.height = physH;
+        canvas.style.width = cssW + 'px';
+        canvas.style.height = cssH + 'px';
+        if (useGL) {
+            gl.viewport(0, 0, physW, physH);
+            gl.clearColor(0, 0, 0, 1);
+            gl.clear(gl.COLOR_BUFFER_BIT);
+            prevTrailOn = false;
+        } else {
+            imgData = ctx.createImageData(physW, physH);
+            pixels = new Uint32Array(imgData.data.buffer);
+        }
+    }
+
+    /* ================================================================
+       WebGL2 初始化
+       ================================================================ */
+    let glProg, fadeProg;
+    let glDataBuf, glFadeVBO;
+    let aPos, aCol, uRes, uPtSz;
+    let fPos, fFadeCol;
+    let glVertData;
+    let prevTrailOn = true;
+
+    if (useGL) {
+        /* 着色器编译辅助 */
+        function mkSh(type, src) {
+            const s = gl.createShader(type);
+            gl.shaderSource(s, src);
+            gl.compileShader(s);
+            if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+                console.error('Shader error:', gl.getShaderInfoLog(s));
+                gl.deleteShader(s);
+                return null;
+            }
+            return s;
+        }
+        function mkProg(vSrc, fSrc) {
+            const v = mkSh(gl.VERTEX_SHADER, vSrc);
+            const f = mkSh(gl.FRAGMENT_SHADER, fSrc);
+            if (!v || !f) return null;
+            const p = gl.createProgram();
+            gl.attachShader(p, v);
+            gl.attachShader(p, f);
+            gl.linkProgram(p);
+            /* 着色器编译后可删除，程序已保留副本 */
+            gl.deleteShader(v);
+            gl.deleteShader(f);
+            if (!gl.getProgramParameter(p, gl.LINK_STATUS)) {
+                console.error('Program error:', gl.getProgramInfoLog(p));
+                gl.deleteProgram(p);
+                return null;
+            }
+            return p;
+        }
+
+        /* ---- 粒子着色器 (GLSL 300 es) ---- */
+        glProg = mkProg(
+            /* 顶点着色器 */
+            `#version 300 es
+             precision highp float;
+             in vec2 aPos;
+             in vec4 aCol;
+             uniform vec2 uRes;
+             uniform float uPtSz;
+             out vec4 vCol;
+             void main(){
+                 vec2 c = (aPos / uRes) * 2.0 - 1.0;
+                 gl_Position = vec4(c * vec2(1.0, -1.0), 0.0, 1.0);
+                 gl_PointSize = uPtSz;
+                 vCol = aCol;
+             }`,
+            /* 片段着色器 */
+            `#version 300 es
+             precision highp float;
+             in vec4 vCol;
+             uniform float uPtSz;
+             out vec4 fragColor;
+             void main(){
+                 if(uPtSz <= 1.5){
+                     fragColor = vCol;
+                     return;
+                 }
+                 vec2 p = 2.0 * gl_PointCoord - 1.0;
+                 float r = dot(p, p);
+                 if(r > 1.0) discard;
+                 float glow = exp(-r * 2.5);
+                 fragColor = vec4(vCol.rgb, vCol.a * glow);
+             }`
+        );
+
+        /* ---- 覆盖矩形着色器（拖影衰减） ---- */
+        fadeProg = mkProg(
+            `#version 300 es
+             precision highp float;
+             in vec2 aPos;
+             void main(){
+                 vec2 c = aPos * 2.0 - 1.0;
+                 gl_Position = vec4(c * vec2(1.0, -1.0), 0.0, 1.0);
+             }`,
+            `#version 300 es
+             precision highp float;
+             uniform vec4 uFade;
+             out vec4 fragColor;
+             void main(){ fragColor = uFade; }`
+        );
+
+        /* 着色器失败 → 回退 CPU */
+        if (!glProg || !fadeProg) {
+            useGL = false;
+            const ext = gl.getExtension('WEBGL_lose_context');
+            if (ext) ext.loseContext();
+            gl = null;
+            const oldCanvas = canvas;
+            canvas = document.createElement('canvas');
+            canvas.id = 'c';
+            oldCanvas.parentNode.replaceChild(canvas, oldCanvas);
+            ctx = canvas.getContext('2d', { alpha: false });
+            rendEl.textContent = 'CPU';
+            rendEl.className = 'cpu';
+        } else {
+            /* 获取 attribute / uniform 位置 */
+            aPos  = gl.getAttribLocation(glProg, 'aPos');
+            aCol  = gl.getAttribLocation(glProg, 'aCol');
+            uRes  = gl.getUniformLocation(glProg, 'uRes');
+            uPtSz = gl.getUniformLocation(glProg, 'uPtSz');
+
+            fPos     = gl.getAttribLocation(fadeProg, 'aPos');
+            fFadeCol = gl.getUniformLocation(fadeProg, 'uFade');
+
+            /* 覆盖矩形顶点 */
+            glFadeVBO = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, glFadeVBO);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+                0,0, 1,0, 0,1,  0,1, 1,0, 1,1
+            ]), gl.STATIC_DRAW);
+
+            /* 粒子顶点数据预分配 */
+            glVertData = new Float32Array(32768 * 5);
+            glDataBuf = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, glDataBuf);
+            gl.bufferData(gl.ARRAY_BUFFER, 32768 * 5 * 4, gl.DYNAMIC_DRAW);
+
+            /* 混合 */
+            gl.enable(gl.BLEND);
+            gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+        }
+    }
+
+    resize();
+
+    /* ================================================================
+       粒子数据
+       ================================================================ */
+    const MAX = 32768, MT = 32;
+
+    let count = 16384, trailOn = true, trailLen = 15;
+    let pAttr = 0.15, pExpl = 15, pFloat = 0.015;
+    let pGrav = 0, pDamp = 0.985;
+    let iMode = 'attract', bMode = 'wrap';
+    let pSize = 1, bgBri = 0, scheme = 'neon', paused = false;
+
+    const buf = new ArrayBuffer(MAX * (28 + MT * 8 + 4));
+    let o = 0;
+    const px   = new Float32Array(buf, o, MAX); o += MAX * 4;
+    const py   = new Float32Array(buf, o, MAX); o += MAX * 4;
+    const vx   = new Float32Array(buf, o, MAX); o += MAX * 4;
+    const vy   = new Float32Array(buf, o, MAX); o += MAX * 4;
+    const ox   = new Float32Array(buf, o, MAX); o += MAX * 4;
+    const oy   = new Float32Array(buf, o, MAX); o += MAX * 4;
+    const ph   = new Float32Array(buf, o, MAX); o += MAX * 4;
+    const trx  = new Float32Array(buf, o, MAX * MT); o += MT * MAX * 4;
+    const try_ = new Float32Array(buf, o, MAX * MT); o += MT * MAX * 4;
+    const pc   = new Uint32Array(buf, o, MAX);
+    const ti   = new Uint8Array(MAX), ex = new Uint8Array(MAX);
+
+    /* ================================================================
+       颜色方案
+       ================================================================ */
+    const PAL = {
+        neon:   [0xFF00FFFF,0xFFFF00FF,0xFF00FF00,0xFFFF0080,0xFF8000FF,0xFF0080FF,0xFFFFFF00,0xFFFF8000],
+        fire:   [0xFFFF2020,0xFFFF4500,0xFFFF8C00,0xFFFFFF00,0xFFFFA500,0xFFFF6347,0xFFFFD700,0xFFFFEE88],
+        ocean:  [0xFF0077FF,0xFF00BFFF,0xFF1E90FF,0xFF00CED1,0xFF4169E1,0xFF87CEEB,0xFF20B2AA,0xFF48D1CC],
+        aurora: [0xFF00FF7F,0xFF00CED1,0xFF9400D3,0xFFFF69B4,0xFF00FA9A,0xFF7B68EE,0xFF40E0D0,0xFFDA70D6],
+        mono:   [0xFFFFFFFF,0xFFCCCCCC,0xFFAAAAAA,0xFFEEEEEE,0xFFBBBBBB,0xFFDDDDDD,0xFF999999,0xFFFFFFFF],
+        rainbow: null
+    };
+    const PN = {neon:'霓虹',fire:'火焰',ocean:'海洋',aurora:'极光',mono:'单色',rainbow:'彩虹'};
+
+    function hsl2u(h, s, l) {
+        s /= 100; l /= 100;
+        const c = (1 - Math.abs(2*l-1)) * s, x = c * (1 - Math.abs((h/60)%2-1)), m = l - c/2;
+        let r,g,b;
+        if(h<60){r=c;g=x;b=0}else if(h<120){r=x;g=c;b=0}else if(h<180){r=0;g=c;b=x}
+        else if(h<240){r=0;g=x;b=c}else if(h<300){r=x;g=0;b=c}else{r=c;g=0;b=x}
+        return (0xFF000000)|((((b+m)*255)|0)<<16)|((((g+m)*255)|0)<<8)|(((r+m)*255)|0);
+    }
+
+    function col4(k, i) {
+        return k === 'rainbow' ? hsl2u((i/MAX)*360, 100, 58) : PAL[k][i % PAL[k].length];
+    }
+
+    function setScheme(k) {
+        scheme = k;
+        for (let i = 0; i < MAX; i++) pc[i] = col4(k, i);
+        document.querySelectorAll('.scheme-bar').forEach(e =>
+            e.classList.toggle('active', e.dataset.s === k)
+        );
+    }
+
+    /* ================================================================
+       粒子初始化
+       ================================================================ */
+    function initP(i) {
+        px[i] = Math.random() * physW;
+        py[i] = Math.random() * physH;
+        vx[i] = (Math.random() - .5) * .3;
+        vy[i] = (Math.random() - .5) * .3;
+        ox[i] = px[i]; oy[i] = py[i];
+        ph[i] = Math.random() * 6.2832;
+        ti[i] = 0; ex[i] = 0;
+        pc[i] = col4(scheme, i);
+        const b = i * MT;
+        for (let j = 0; j < MT; j++) { trx[b+j] = px[i]; try_[b+j] = py[i]; }
+    }
+
+    function initAll() { for (let i = 0; i < MAX; i++) initP(i); }
+    initAll();
+
+    /* ================================================================
+       输入处理
+       ================================================================ */
+    const inp = { a:false, x:0, y:0, p:false };
+    const tP = v => v * dpr;
+
+    function dn(e) {
+        if (panelOpen) return;
+        e.preventDefault(); inp.a = true;
+        const t = e.touches ? e.touches[0] : e;
+        inp.x = tP(t.clientX); inp.y = tP(t.clientY);
+    }
+    function mv(e) {
+        if (!inp.a) return; e.preventDefault();
+        const t = e.touches ? e.touches[0] : e;
+        inp.x = tP(t.clientX); inp.y = tP(t.clientY);
+    }
+    function up(e) { if (e) e.preventDefault(); inp.a = false; }
+
+    canvas.addEventListener('mousedown', dn);
+    canvas.addEventListener('mousemove', mv);
+    canvas.addEventListener('mouseup', up);
+    canvas.addEventListener('mouseleave', up);
+    canvas.addEventListener('touchstart', dn, {passive:false});
+    canvas.addEventListener('touchmove', mv, {passive:false});
+    canvas.addEventListener('touchend', up);
+    window.addEventListener('resize', () => { resize(); initAll(); });
+
+    /* ================================================================
+       FPS
+       ================================================================ */
+    const fpsE = document.getElementById('fps');
+    let fc = 0, ft = performance.now();
+
+    function tickFps() {
+        if (paused) { fpsE.textContent = '已暂停'; return; }
+        fc++;
+        const n = performance.now();
+        if (n - ft >= 300) {
+            fpsE.textContent = (fc / (n - ft) * 1000).toFixed(0) + ' FPS';
+            fc = 0; ft = n;
+        }
+    }
+
+    /* ================================================================
+       拖影 Alpha 查找表（CPU 模式）
+       ================================================================ */
+    let tA = new Uint8Array(MT);
+    function bTA() {
+        const l = trailLen;
+        for (let i = 0; i < l; i++)
+            tA[i] = Math.min(255, (8 + i * (220 / Math.max(1, l - 1)))) & 0xFF;
+    }
+    bTA();
+
+    /* ================================================================
+       物理更新
+       ================================================================ */
+    function update() {
+        const jr = inp.p && !inp.a;
+        const ix = inp.x, iy = inp.y;
+        const at = pAttr, exl = pExpl, fl = pFloat, gv = pGrav, dp = pDamp;
+        const isA = iMode === 'attract', isB = bMode === 'bounce';
+        const doTrail = !useGL && trailOn && trailLen > 0;
+        const w = physW, h = physH;
+
+        for (let i = 0; i < count; i++) {
+            if (doTrail) {
+                const t = ti[i], b = i * MT;
+                trx[b + t] = px[i];
+                try_[b + t] = py[i];
+                ti[i] = (t + 1) & 31;
+            }
+
+            if (inp.a) {
+                ex[i] = 0;
+                const dx = ix - px[i], dy = iy - py[i];
+                const d = Math.sqrt(dx*dx + dy*dy) + .1;
+                const f = at * (1 + 300/d);
+                const dir = isA ? 1 : -1;
+                vx[i] += (dx/d) * f * dir;
+                vy[i] += (dy/d) * f * dir;
+                vx[i] *= .88; vy[i] *= .88;
+            } else if (jr) {
+                ex[i] = 1;
+                const dx = px[i] - ix, dy = py[i] - iy;
+                const d = Math.sqrt(dx*dx + dy*dy) + .1;
+                const f = exl * (d < 300 ? (300-d)/300 : 0);
+                if (f > 0) {
+                    vx[i] = (dx/d)*f + (Math.random()-.5)*3;
+                    vy[i] = (dy/d)*f + (Math.random()-.5)*3;
+                } else {
+                    const a = Math.random() * 6.2832;
+                    vx[i] = Math.cos(a)*8; vy[i] = Math.sin(a)*8;
+                }
+            } else if (ex[i]) {
+                vx[i] *= .92; vy[i] *= .92;
+                vy[i] += gv;
+                if (Math.abs(vx[i]) + Math.abs(vy[i]) < 1) ex[i] = 0;
+            } else {
+                ph[i] += .025;
+                vx[i] += (ox[i]-px[i])*.0015 + Math.cos(ph[i])*fl;
+                vy[i] += (oy[i]-py[i])*.0015 + Math.sin(ph[i])*fl;
+                vy[i] += gv;
+                vx[i] *= dp; vy[i] *= dp;
+            }
+
+            px[i] += vx[i]; py[i] += vy[i];
+
+            if (isB) {
+                if (px[i] < 0)     { px[i] = 0;     vx[i] =  Math.abs(vx[i])*.7; }
+                if (px[i] >= w)    { px[i] = w - 1; vx[i] = -Math.abs(vx[i])*.7; }
+                if (py[i] < 0)     { py[i] = 0;     vy[i] =  Math.abs(vy[i])*.7; }
+                if (py[i] >= h)    { py[i] = h - 1; vy[i] = -Math.abs(vy[i])*.7; }
+            } else {
+                if (px[i] < 0) px[i] = w; else if (px[i] > w) px[i] = 0;
+                if (py[i] < 0) py[i] = h; else if (py[i] > h) py[i] = 0;
+            }
+        }
+        inp.p = inp.a;
+    }
+
+    /* ================================================================
+       WebGL2 绘制
+       ================================================================ */
+    function drawGL() {
+        const bv = bgBri / 255;
+
+        /* 拖影开关变化时完全清屏 */
+        if (!trailOn && prevTrailOn) {
+            gl.clearColor(bv, bv, bv, 1);
+            gl.clear(gl.COLOR_BUFFER_BIT);
+        }
+        prevTrailOn = trailOn;
+
+        /* 计算 fade alpha */
+        let fa;
+        if (!trailOn) {
+            fa = 1.0;
+        } else {
+            fa = 0.35 * Math.exp(-trailLen * 0.1);
+        }
+
+        /* 1) 画半透明覆盖矩形 */
+        gl.useProgram(fadeProg);
+        gl.bindBuffer(gl.ARRAY_BUFFER, glFadeVBO);
+        gl.enableVertexAttribArray(fPos);
+        gl.vertexAttribPointer(fPos, 2, gl.FLOAT, false, 0, 0);
+        gl.uniform4f(fFadeCol, bv, bv, bv, fa);
+        gl.drawArrays(gl.TRIANGLES, 0, 6);
+        gl.disableVertexAttribArray(fPos);
+
+        /* 2) 准备粒子顶点数据 (x, y, r, g, b) */
+        const gd = glVertData;
+        for (let i = 0; i < count; i++) {
+            const b = i * 5;
+            gd[b]     = px[i];
+            gd[b + 1] = py[i];
+            const c = pc[i];
+            gd[b + 2] = (c & 0xFF) / 255;
+            gd[b + 3] = ((c >> 8) & 0xFF) / 255;
+            gd[b + 4] = ((c >> 16) & 0xFF) / 255;
+        }
+
+        /* 3) 上传并绘制粒子 */
+        gl.useProgram(glProg);
+        gl.bindBuffer(gl.ARRAY_BUFFER, glDataBuf);
+        gl.bufferSubData(gl.ARRAY_BUFFER, 0, gd.subarray(0, count * 5));
+
+        const stride = 20;
+        gl.enableVertexAttribArray(aPos);
+        gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, stride, 0);
+        gl.enableVertexAttribArray(aCol);
+        gl.vertexAttribPointer(aCol, 3, gl.FLOAT, false, stride, 8);
+
+        gl.uniform2f(uRes, physW, physH);
+        gl.uniform1f(uPtSz, pSize);
+
+        gl.drawArrays(gl.POINTS, 0, count);
+
+        gl.disableVertexAttribArray(aPos);
+        gl.disableVertexAttribArray(aCol);
+    }
+
+    /* ================================================================
+       CPU 绘制
+       ================================================================ */
+    function drawCPU() {
+        const bv = bgBri & 0xFF;
+        pixels.fill(0xFF000000 | (bv << 16) | (bv << 8) | bv);
+
+        const w = physW, h = physH;
+        const tl = trailOn ? trailLen : 0;
+        const ta = tA;
+        const sz = pSize, hs = (sz - 1) >> 1;
+
+        for (let i = 0; i < count; i++) {
+            const c = pc[i];
+            const wi = ti[i];
+            const base = i * MT;
+            const cx = px[i] | 0, cy = py[i] | 0;
+
+            for (let j = 0; j < tl; j++) {
+                const ri = (wi + j) & 31;
+                const txj = trx[base + ri] | 0;
+                const tyj = try_[base + ri] | 0;
+                if (txj >= 0 && txj < w && tyj >= 0 && tyj < h) {
+                    const a = ta[j];
+                    pixels[tyj * w + txj] =
+                        0xFF000000 |
+                        ((((c >> 16) & 0xFF) * a >> 8) << 16) |
+                        (((c >> 8 & 0xFF) * a >> 8) << 8) |
+                        ((c & 0xFF) * a >> 8);
+                }
+            }
+
+            for (let dy = 0; dy < sz; dy++) {
+                const pyy = cy - hs + dy;
+                if (pyy < 0 || pyy >= h) continue;
+                const ro = pyy * w;
+                for (let dx = 0; dx < sz; dx++) {
+                    const pxx = cx - hs + dx;
+                    if (pxx >= 0 && pxx < w) pixels[ro + pxx] = c;
+                }
+            }
+        }
+        ctx.putImageData(imgData, 0, 0);
+    }
+
+    /* ================================================================
+       主循环
+       ================================================================ */
+    function loop() {
+        if (!paused) update();
+        if (useGL) drawGL(); else drawCPU();
+        tickFps();
+        requestAnimationFrame(loop);
+    }
+    requestAnimationFrame(loop);
+
+    /* ================================================================
+       面板 UI
+       ================================================================ */
+    let panelOpen = false;
+    const panel = document.getElementById('panel');
+    const ovr   = document.getElementById('overlay');
+    const sb    = document.getElementById('settingsBtn');
+
+    function oP() { panelOpen=true; panel.classList.add('open'); ovr.classList.add('show'); sb.classList.add('open'); up(); }
+    function cP() { panelOpen=false; panel.classList.remove('open'); ovr.classList.remove('show'); sb.classList.remove('open'); }
+    sb.addEventListener('click', () => panelOpen ? cP() : oP());
+    ovr.addEventListener('click', cP);
+
+    /* ---- iOS Toggle ---- */
+    class TG {
+        constructor(p, v, cb) {
+            this.v = v; this.cb = cb;
+            this.e = document.createElement('div');
+            this.e.className = 'ios-toggle' + (v ? ' on' : '');
+            const k = document.createElement('div');
+            k.className = 'ios-toggle-knob';
+            this.e.appendChild(k);
+            p.appendChild(this.e);
+            this.e.addEventListener('click', () => {
+                this.v = !this.v;
+                this.e.classList.toggle('on', this.v);
+                this.cb(this.v);
+            });
+        }
+        set(v) { this.v = v; this.e.classList.toggle('on', v); }
+    }
+
+    /* ---- iOS Slider ---- */
+    class SL {
+        constructor(p, mn, mx, st, v, cb) {
+            this.mn=mn; this.mx=mx; this.st=st; this.v=v; this.cb=cb;
+            this.r = (v - mn) / (mx - mn);
+            this.e = document.createElement('div');
+            this.e.className = 'ios-slider';
+            this.t = document.createElement('div');
+            this.t.className = 'ios-slider-track';
+            this.f = document.createElement('div');
+            this.f.className = 'ios-slider-fill';
+            this.h = document.createElement('div');
+            this.h.className = 'ios-slider-thumb';
+            this.t.appendChild(this.f);
+            this.e.appendChild(this.t);
+            this.e.appendChild(this.h);
+            p.appendChild(this.e);
+            this._r();
+            this._b();
+        }
+        _r() {
+            const p = this.r * 100;
+            this.f.style.width = p + '%';
+            this.h.style.left = 'calc(' + p + '% - 14px)';
+        }
+        set(v) { this.v = v; this.r = (v - this.mn) / (this.mx - this.mn); this._r(); }
+        _b() {
+            let dg = false;
+            const s = this;
+            function calc(cx) {
+                const rc = s.t.getBoundingClientRect();
+                let r = (cx - rc.left) / rc.width;
+                r = Math.max(0, Math.min(1, r));
+                let v = s.mn + r * (s.mx - s.mn);
+                v = Math.round(v / s.st) * s.st;
+                v = Math.max(s.mn, Math.min(s.mx, v));
+                v = parseFloat(v.toPrecision(10));
+                s.v = v; s.r = (v - s.mn) / (s.mx - s.mn);
+                s._r(); s.cb(v);
+            }
+            function go(e) {
+                dg = true; s.h.classList.add('dragging');
+                calc(e.touches ? e.touches[0].clientX : e.clientX);
+                e.preventDefault();
+            }
+            s.h.addEventListener('mousedown', go);
+            s.t.addEventListener('mousedown', go);
+            s.h.addEventListener('touchstart', go, {passive:false});
+            s.t.addEventListener('touchstart', go, {passive:false});
+            window.addEventListener('mousemove', e => { if(dg) calc(e.clientX); });
+            window.addEventListener('touchmove', e => { if(dg) calc(e.touches[0].clientX); }, {passive:true});
+            function end() { if(dg) { dg=false; s.h.classList.remove('dragging'); } }
+            window.addEventListener('mouseup', end);
+            window.addEventListener('touchend', end);
+        }
+    }
+
+    /* ---- Segmented Control ---- */
+    function seg(id, cb) {
+        const el = document.getElementById(id);
+        const items = el.querySelectorAll('.seg');
+        items.forEach(s => s.addEventListener('click', () => {
+            items.forEach(x => x.classList.remove('active'));
+            s.classList.add('active');
+            cb(s.dataset.val);
+        }));
+        return {
+            set(v) { items.forEach(s => s.classList.toggle('active', s.dataset.val === v)); }
+        };
+    }
+
+    /* ---- 创建所有控件 ---- */
+
+    let prevC = count;
+    new SL(document.getElementById('countSlider'), 1024, 32768, 1024, count, v => {
+        if (v > prevC) for (let i = prevC; i < v; i++) initP(i);
+        prevC = v; count = v;
+        document.getElementById('countVal').textContent = v;
+    });
+
+    new SL(document.getElementById('sizeSlider'), 1, 4, 1, 1, v => {
+        pSize = v;
+        document.getElementById('sizeVal').textContent = v;
+    });
+
+    new TG(document.getElementById('trailToggle'), trailOn, v => {
+        trailOn = v;
+        document.getElementById('trailLenSection').classList.toggle('disabled', !v);
+    });
+
+    new SL(document.getElementById('trailLenSlider'), 1, 32, 1, trailLen, v => {
+        trailLen = v;
+        bTA();
+        document.getElementById('trailLenVal').textContent = v;
+    });
+
+    new SL(document.getElementById('attractSlider'), 0.01, 0.5, 0.01, pAttr, v => {
+        pAttr = v;
+        document.getElementById('attractVal').textContent = v.toFixed(2);
+    });
+
+    new SL(document.getElementById('explodeSlider'), 1, 40, 1, pExpl, v => {
+        pExpl = v;
+        document.getElementById('explodeVal').textContent = v;
+    });
+
+    new SL(document.getElementById('floatSlider'), 0, 0.06, 0.001, pFloat, v => {
+        pFloat = v;
+        document.getElementById('floatVal').textContent = v.toFixed(3);
+    });
+
+    new SL(document.getElementById('gravitySlider'), -0.5, 0.5, 0.01, pGrav, v => {
+        pGrav = v;
+        document.getElementById('gravityVal').textContent = v.toFixed(2);
+    });
+
+    new SL(document.getElementById('dampSlider'), 0.9, 0.999, 0.001, pDamp, v => {
+        pDamp = v;
+        document.getElementById('dampVal').textContent = v.toFixed(3);
+    });
+
+    new SL(document.getElementById('bgSlider'), 0, 30, 1, bgBri, v => {
+        bgBri = v;
+        document.getElementById('bgVal').textContent = v;
+    });
+
+    const mc = seg('modeCtrl', v => { iMode = v; });
+    const bc = seg('boundaryCtrl', v => { bMode = v; });
+
+    /* ---- 颜色方案 ---- */
+    const sgEl = document.getElementById('schemeGrid');
+    Object.keys(PAL).forEach(k => {
+        const it = document.createElement('div');
+        it.className = 'scheme-item';
+        const br = document.createElement('div');
+        br.className = 'scheme-bar' + (k === scheme ? ' active' : '');
+        br.dataset.s = k;
+
+        if (k === 'rainbow') {
+            for (let i = 0; i < 6; i++) {
+                const sw = document.createElement('div');
+                sw.className = 'scheme-swatch';
+                sw.style.background = 'hsl(' + (i*60) + ',100%,58%)';
+                br.appendChild(sw);
+            }
+        } else {
+            PAL[k].slice(0, 4).forEach(c => {
+                const sw = document.createElement('div');
+                sw.className = 'scheme-swatch';
+                sw.style.background = 'rgb('+(c&0xFF)+','+((c>>8)&0xFF)+','+((c>>16)&0xFF)+')';
+                br.appendChild(sw);
+            });
+        }
+
+        const lb = document.createElement('div');
+        lb.className = 'scheme-label';
+        lb.textContent = PN[k];
+        it.appendChild(br);
+        it.appendChild(lb);
+        it.addEventListener('click', () => setScheme(k));
+        sgEl.appendChild(it);
+    });
+
+    /* ---- 暂停 / 打乱 ---- */
+    const pb = document.getElementById('pauseBtn');
+    pb.addEventListener('click', () => {
+        paused = !paused;
+        pb.textContent = paused ? '继续' : '暂停';
+        pb.classList.toggle('paused', paused);
+    });
+
+    document.getElementById('shuffleBtn').addEventListener('click', () => {
+        for (let i = 0; i < count; i++) {
+            px[i] = Math.random() * physW;
+            py[i] = Math.random() * physH;
+            ox[i] = px[i]; oy[i] = py[i];
+            vx[i] = (Math.random() - .5) * 4;
+            vy[i] = (Math.random() - .5) * 4;
+            ex[i] = 0;
+            const b = i * MT;
+            for (let j = 0; j < MT; j++) { trx[b+j] = px[i]; try_[b+j] = py[i]; }
+            ti[i] = 0;
+        }
+        if (useGL) {
+            const bv = bgBri / 255;
+            gl.clearColor(bv, bv, bv, 1);
+            gl.clear(gl.COLOR_BUFFER_BIT);
+        }
+    });
+
+    /* ---- 重置 ---- */
+    document.getElementById('resetBtn').addEventListener('click', () => {
+        count = 16384; prevC = 16384;
+        trailOn = true; trailLen = 15;
+        pAttr = .15; pExpl = 15; pFloat = .015;
+        pGrav = 0; pDamp = .985;
+        iMode = 'attract'; bMode = 'wrap';
+        pSize = 1; bgBri = 0; paused = false;
+
+        document.getElementById('countVal').textContent = '16384';
+        document.getElementById('sizeVal').textContent = '1';
+        document.getElementById('trailLenVal').textContent = '15';
+        document.getElementById('trailLenSection').classList.remove('disabled');
+        document.getElementById('attractVal').textContent = '0.15';
+        document.getElementById('explodeVal').textContent = '15';
+        document.getElementById('floatVal').textContent = '0.015';
+        document.getElementById('gravityVal').textContent = '0.00';
+        document.getElementById('dampVal').textContent = '0.985';
+        document.getElementById('bgVal').textContent = '0';
+
+        mc.set('attract'); bc.set('wrap');
+        pb.textContent = '暂停'; pb.classList.remove('paused');
+        bTA(); setScheme('neon'); initAll();
+
+        if (useGL) {
+            gl.clearColor(0, 0, 0, 1);
+            gl.clear(gl.COLOR_BUFFER_BIT);
+            prevTrailOn = false;
+        }
+    });
+    </script>
+</body>
+</html>
