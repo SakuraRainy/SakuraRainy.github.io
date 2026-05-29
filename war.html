@@ -1,0 +1,1620 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>多阵营战争模拟器 Pro</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+body {
+  font-family: "Songti SC", "SimSun", "STSong", serif;
+  background: linear-gradient(160deg, #0c1929 0%, #1a4d3a 50%, #0c1929 100%);
+  color: #e8e8e8;
+  overflow: hidden;
+  touch-action: none;
+  height: 100vh;
+  width: 100vw;
+  display: flex;
+  flex-direction: column;
+}
+
+#faction-bar {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(10, 15, 25, 0.95);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  flex-shrink: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+#faction-bar::-webkit-scrollbar { display: none; }
+.faction {
+  flex: 0 0 auto;
+  min-width: 150px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+.faction-name {
+  font-size: 12px;
+  font-weight: bold;
+  margin-bottom: 4px;
+  letter-spacing: 1px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.faction-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.faction-stats {
+  display: flex;
+  gap: 8px;
+  font-size: 10px;
+  color: #aaa;
+  flex-wrap: wrap;
+}
+.faction-stats b { color: #fff; font-weight: normal; }
+.hp-bar {
+  width: 100%;
+  height: 3px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 2px;
+  margin-top: 4px;
+  overflow: hidden;
+}
+.hp-bar > div { height: 100%; border-radius: 2px; transition: width 0.3s; }
+#add-faction-btn {
+  flex: 0 0 auto;
+  width: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255,255,255,0.05);
+  border: 1px dashed rgba(255,255,255,0.15);
+  border-radius: 8px;
+  color: #888;
+  font-size: 11px;
+  cursor: pointer;
+  font-family: inherit;
+}
+#add-faction-btn:active { background: rgba(255,255,255,0.1); }
+
+#control-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 12px;
+  background: rgba(10, 15, 25, 0.95);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  flex-shrink: 0;
+}
+.control-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.control-label { font-size: 11px; color: #666; margin-right: 2px; white-space: nowrap; }
+#control-panel button, #control-panel select {
+  font-family: inherit;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.05);
+  color: #ccc;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 34px;
+}
+#control-panel button:active { transform: scale(0.96); background: rgba(255,255,255,0.1); }
+#control-panel button.active {
+  background: rgba(255,255,255,0.15);
+  border-color: rgba(255,255,255,0.3);
+  color: #fff;
+}
+.team-btn.active {
+  background: rgba(255,255,255,0.2) !important;
+  border-color: currentColor !important;
+  color: #fff !important;
+}
+.unit-btn svg { width: 14px; height: 14px; }
+#btn-start { color: #2ecc71; }
+#btn-pause { color: #f39c12; }
+#btn-reset { color: #e74c3c; }
+select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  padding-right: 24px !important;
+}
+
+#battlefield-container {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  touch-action: none;
+}
+canvas { display: block; width: 100%; height: 100%; }
+
+#status-float {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(10, 15, 25, 0.95);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 10px;
+  padding: 8px 18px;
+  display: flex;
+  gap: 20px;
+  font-size: 12px;
+  color: #888;
+  pointer-events: none;
+  white-space: nowrap;
+  z-index: 10;
+}
+#status-float b { color: #ddd; font-weight: normal; }
+
+#tactic-hint {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 20px;
+  color: rgba(255,255,255,0.12);
+  pointer-events: none;
+  letter-spacing: 6px;
+  transition: opacity 0.5s;
+  text-align: center;
+}
+
+#event-toast {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(10, 15, 25, 0.95);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-size: 13px;
+  color: #f1c40f;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.5s;
+  z-index: 20;
+  text-align: center;
+}
+
+#faction-modal {
+  display: none;
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.7);
+  z-index: 100;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+#faction-modal.show { display: flex; }
+.modal-box {
+  background: #141e2e;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 12px;
+  padding: 20px;
+  width: 100%;
+  max-width: 320px;
+}
+.modal-title { font-size: 16px; margin-bottom: 16px; text-align: center; color: #fff; }
+.modal-input {
+  width: 100%;
+  padding: 10px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 6px;
+  color: #fff;
+  font-family: inherit;
+  font-size: 14px;
+  margin-bottom: 12px;
+}
+.color-options { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; justify-content: center; }
+.color-opt {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+.color-opt:active { transform: scale(0.9); }
+.color-opt.selected { border-color: #fff; box-shadow: 0 0 0 2px rgba(255,255,255,0.3); }
+.modal-btns { display: flex; gap: 10px; }
+.modal-btns button {
+  flex: 1;
+  padding: 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.05);
+  color: #ccc;
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.modal-btns button.primary {
+  background: rgba(46, 204, 113, 0.2);
+  border-color: rgba(46, 204, 113, 0.4);
+  color: #2ecc71;
+}
+
+@media (max-width: 480px) {
+  .faction { min-width: 130px; padding: 5px 8px; }
+  .faction-name { font-size: 11px; }
+  .faction-stats { font-size: 9px; gap: 6px; }
+  #control-panel button, #control-panel select { padding: 5px 8px; font-size: 11px; min-height: 32px; }
+  #status-float { font-size: 11px; padding: 6px 14px; gap: 14px; bottom: 12px; }
+  .control-label { font-size: 10px; }
+}
+</style>
+</head>
+<body>
+
+<div id="faction-bar">
+  <button id="add-faction-btn">+ 阵营</button>
+</div>
+
+<div id="control-panel">
+  <div class="control-row">
+    <span class="control-label">地图:</span>
+    <select id="map-select">
+      <option value="random">随机遭遇</option>
+      <option value="confrontation">两军对垒</option>
+      <option value="encirclement">包围战</option>
+      <option value="landing">登陆作战</option>
+      <option value="canyon">峡谷争夺</option>
+      <option value="urban">城市巷战</option>
+      <option value="crossroad">十字路口</option>
+      <option value="islands">群岛混战</option>
+      <option value="maze">迷宫突围</option>
+      <option value="fortress">要塞攻防</option>
+    </select>
+    <span class="control-label" style="margin-left:8px">队伍:</span>
+    <div id="team-select" class="control-row" style="padding:0;flex:1"></div>
+  </div>
+  <div class="control-row">
+    <span class="control-label">单位:</span>
+    <button class="unit-btn active" data-unit="swordsman">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><line x1="10" y1="3" x2="10" y2="17"/><line x1="5" y1="10" x2="15" y2="10"/></svg>
+      剑士
+    </button>
+    <button class="unit-btn" data-unit="archer">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 10 Q10 3 17 10 Q10 17 3 10"/><line x1="3" y1="10" x2="17" y2="10"/></svg>
+      弓箭手
+    </button>
+    <button class="unit-btn" data-unit="knight">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><polygon points="10,2 18,18 2,18"/></svg>
+      骑士
+    </button>
+    <button class="unit-btn" data-unit="mage">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><circle cx="10" cy="10" r="6"/><line x1="10" y1="4" x2="10" y2="2"/></svg>
+      法师
+    </button>
+    <div style="flex:1"></div>
+    <button id="btn-start">开始</button>
+    <button id="btn-pause">暂停</button>
+    <button id="btn-reset">重置</button>
+  </div>
+</div>
+
+<div id="battlefield-container">
+  <canvas id="battlefield"></canvas>
+  <div id="status-float">
+    <span>总单位: <b id="total-units">0</b></span>
+    <span>FPS: <b id="fps">60</b></span>
+    <span>时间: <b id="time">0</b>s</span>
+  </div>
+  <div id="tactic-hint"></div>
+  <div id="event-toast"></div>
+</div>
+
+<div id="faction-modal">
+  <div class="modal-box">
+    <div class="modal-title">新建阵营</div>
+    <input type="text" class="modal-input" id="new-faction-name" placeholder="输入阵营名称" maxlength="6">
+    <div class="color-options" id="color-options"></div>
+    <div class="modal-btns">
+      <button onclick="closeFactionModal()">取消</button>
+      <button class="primary" onclick="confirmAddFaction()">确认添加</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const CONFIG = {
+  gridCols: 16, gridRows: 10,
+  staminaRegen: 0.3,
+  staminaRegenFriendly: 0.9,
+  occupationRate: 0.08,
+  occupationDecay: 0.015,
+  commanderInterval: 40,
+  maxUnits: 300,
+  frontlinePulse: true,
+  eventInterval: 600
+};
+
+const UNIT_TYPES = {
+  swordsman: { hp: 100, speed: 1.6, range: 28, damage: 14, stamina: 100, size: 7, attackCost: 3, moveCost: 0.08, vision: 120 },
+  archer:    { hp: 55,  speed: 1.3, range: 140, damage: 10, stamina: 80,  size: 6, attackCost: 2, moveCost: 0.06, vision: 180 },
+  knight:    { hp: 140, speed: 2.6, range: 32, damage: 22, stamina: 120, size: 9, attackCost: 4, moveCost: 0.12, chargeBonus: 1.5, vision: 100 },
+  mage:      { hp: 45,  speed: 1.1, range: 110, damage: 18, stamina: 70,  size: 6, attackCost: 5, moveCost: 0.05, vision: 150, aoe: true }
+};
+
+const TERRAIN_TYPES = {
+  plain:    { name: '平原', speedMul: 1.0, defMul: 1.0, color: 'transparent' },
+  forest:   { name: '森林', speedMul: 0.55, defMul: 1.4, color: 'rgba(46, 204, 113, 0.07)' },
+  hill:     { name: '高地', speedMul: 0.7, defMul: 1.25, color: 'rgba(241, 196, 15, 0.05)' },
+  river:    { name: '河流', speedMul: 0.2, defMul: 0.6, color: 'rgba(52, 152, 219, 0.1)' },
+  building: { name: '建筑', speedMul: 0.45, defMul: 1.6, color: 'rgba(149, 165, 166, 0.08)' },
+  swamp:    { name: '沼泽', speedMul: 0.35, defMul: 0.8, color: 'rgba(101, 67, 33, 0.08)' }
+};
+
+const EXTRA_COLORS = ['#9b59b6', '#e67e22', '#1abc9c', '#f1c40f', '#e91e63', '#00bcd4', '#8bc34a', '#ff5722', '#795548', '#607d8b'];
+
+let factions = [
+  { id: 'red',  name: '红方', color: '#e74c3c', colorLight: '#ff9999' },
+  { id: 'blue', name: '蓝方', color: '#3498db', colorLight: '#99ccff' }
+];
+let selectedFaction = 'red';
+let selectedUnit = 'swordsman';
+let selectedMap = 'random';
+
+const dist = (a,b) => Math.hypot(a.x-b.x, a.y-b.y);
+const clamp = (v,min,max) => Math.max(min, Math.min(max, v));
+const rand = (min,max) => min + Math.random() * (max - min);
+const randInt = (min,max) => Math.floor(rand(min, max+1));
+
+const canvas = document.getElementById('battlefield');
+const ctx = canvas.getContext('2d');
+const container = document.getElementById('battlefield-container');
+let W, H;
+function resize() {
+  W = container.clientWidth;
+  H = container.clientHeight;
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = W * dpr;
+  canvas.height = H * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+window.addEventListener('resize', resize);
+resize();
+
+class Particle {
+  constructor(x, y, color, speed, life, size) {
+    const angle = Math.random() * Math.PI * 2;
+    this.x = x; this.y = y;
+    this.vx = Math.cos(angle) * speed;
+    this.vy = Math.sin(angle) * speed;
+    this.color = color;
+    this.life = life;
+    this.maxLife = life;
+    this.size = size || 2;
+  }
+  update() {
+    this.x += this.vx; this.y += this.vy;
+    this.vx *= 0.95; this.vy *= 0.95;
+    this.life--;
+  }
+  draw(ctx) {
+    ctx.globalAlpha = this.life / this.maxLife;
+    ctx.fillStyle = this.color;
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.size * (this.life/this.maxLife), 0, Math.PI*2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+}
+
+class Projectile {
+  constructor(x, y, target, damage, factionId, isMagic) {
+    this.x = x; this.y = y;
+    this.target = target;
+    this.damage = damage;
+    this.factionId = factionId;
+    this.isMagic = isMagic;
+    this.speed = isMagic ? 4 : 6;
+    this.active = true;
+    const d = dist(this, target);
+    this.vx = ((target.x - x) / d) * this.speed;
+    this.vy = ((target.y - y) / d) * this.speed;
+  }
+  update() {
+    this.x += this.vx; this.y += this.vy;
+    if (dist(this, this.target) < 12) {
+      if (this.isMagic) {
+        for (const u of game.units) {
+          if (u.factionId === this.factionId || u.hp <= 0) continue;
+          if (dist(this, u) < 40) u.takeDamage(this.damage * 0.6);
+        }
+      }
+      this.target.takeDamage(this.isMagic ? this.damage : this.damage);
+      this.active = false;
+      const fc = getFaction(this.factionId);
+      for (let i = 0; i < (this.isMagic ? 12 : 5); i++) {
+        game.particles.push(new Particle(this.x, this.y, this.isMagic ? '#9b59b6' : fc.color, this.isMagic ? 3 : 2, this.isMagic ? 25 : 15, this.isMagic ? 4 : 2));
+      }
+    }
+    if (this.x < 0 || this.x > W || this.y < 0 || this.y > H) this.active = false;
+  }
+  draw(ctx) {
+    if (this.isMagic) {
+      ctx.fillStyle = 'rgba(155, 89, 182, 0.8)';
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, 4, 0, Math.PI*2);
+      ctx.fill();
+      ctx.shadowBlur = 10;
+      ctx.shadowColor = '#9b59b6';
+      ctx.fillStyle = 'rgba(200, 160, 255, 0.5)';
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, 2, 0, Math.PI*2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    } else {
+      const fc = getFaction(this.factionId);
+      ctx.strokeStyle = fc.colorLight;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(this.x - this.vx*2, this.y - this.vy*2);
+      ctx.lineTo(this.x, this.y);
+      ctx.stroke();
+    }
+  }
+}
+
+class Unit {
+  constructor(factionId, type, x, y) {
+    this.factionId = factionId;
+    this.type = type;
+    const cfg = UNIT_TYPES[type];
+    this.maxHp = cfg.hp; this.hp = cfg.hp;
+    this.speed = cfg.speed; this.range = cfg.range;
+    this.damage = cfg.damage; this.maxStamina = cfg.stamina;
+    this.stamina = cfg.stamina; this.size = cfg.size;
+    this.attackCost = cfg.attackCost; this.moveCost = cfg.moveCost;
+    this.chargeBonus = cfg.chargeBonus || 1;
+    this.vision = cfg.vision;
+    this.aoe = cfg.aoe || false;
+    this.x = x; this.y = y;
+    this.vx = 0; this.vy = 0;
+    this.target = null;
+    this.state = 'idle';
+    this.cooldown = 0;
+    this.shield = 0;
+    this.flankTarget = null;
+    this.retreatTimer = 0;
+    this.attackTimer = 0;
+    this.patrolTarget = null;
+    this.patrolTimer = 0;
+    this.terrainBoost = 1;
+    this.level = 1;
+    this.kills = 0;
+  }
+
+  getFaction() { return getFaction(this.factionId); }
+  getColor() { return this.getFaction().color; }
+
+  takeDamage(dmg) {
+    if (this.shield > 0) {
+      this.shield -= dmg;
+      if (this.shield < 0) { dmg = -this.shield; this.shield = 0; }
+      else dmg = 0;
+    }
+    dmg *= this.terrainBoost;
+    this.hp -= dmg;
+    for (let i = 0; i < 3; i++) {
+      game.particles.push(new Particle(this.x, this.y, this.getColor(), 1.5, 10, 2));
+    }
+    if (this.hp <= 0) {
+      for (let i = 0; i < 8; i++) game.particles.push(new Particle(this.x, this.y, '#ffaa00', 3, 20, 3));
+      game.particles.push(new Particle(this.x, this.y, '#ffffff', 4, 12, 5));
+      if (this.target && this.target.hp > 0) {
+        this.target.kills++;
+        if (this.target.kills >= 3 && this.target.level < 3) {
+          this.target.level++;
+          this.target.maxHp += 20;
+          this.target.hp += 20;
+          this.target.damage += 4;
+          game.showEvent(this.target.getFaction().name + ' 单位升级！');
+        }
+      }
+    }
+  }
+
+  findTarget() {
+    let best = null, bestD = Infinity;
+    for (const u of game.units) {
+      if (u.factionId === this.factionId || u.hp <= 0) continue;
+      const d = dist(this, u);
+      if (d < this.vision && d < bestD) { bestD = d; best = u; }
+    }
+    return best;
+  }
+
+  getGrid() {
+    return {
+      col: clamp(Math.floor(this.x / (W / CONFIG.gridCols)), 0, CONFIG.gridCols-1),
+      row: clamp(Math.floor(this.y / (H / CONFIG.gridRows)), 0, CONFIG.gridRows-1)
+    };
+  }
+
+  getTerrain() {
+    const g = this.getGrid();
+    return game.terrain[g.row]?.[g.col] || 'plain';
+  }
+
+  isFriendlyZone() {
+    const g = this.getGrid();
+    const occ = game.occupation[g.row][g.col];
+    let myVal = 0, maxEnemy = 0;
+    for (const fid in occ) {
+      if (fid === 'total') continue;
+      if (fid === this.factionId) myVal = occ[fid];
+      else maxEnemy = Math.max(maxEnemy, occ[fid]);
+    }
+    return myVal > maxEnemy;
+  }
+
+  getNearestEnemyFactionZone() {
+    let best = null, bestD = Infinity;
+    for (let r = 0; r < CONFIG.gridRows; r++) {
+      for (let c = 0; c < CONFIG.gridCols; c++) {
+        const occ = game.occupation[r][c];
+        let hasEnemy = false;
+        for (const fid in occ) {
+          if (fid !== 'total' && fid !== this.factionId && occ[fid] > 40) hasEnemy = true;
+        }
+        if (hasEnemy) {
+          const cx = (c + 0.5) * (W / CONFIG.gridCols);
+          const cy = (r + 0.5) * (H / CONFIG.gridRows);
+          const d = dist(this, {x:cx,y:cy});
+          if (d < bestD) { bestD = d; best = {x:cx,y:cy}; }
+        }
+      }
+    }
+    return best;
+  }
+
+  update() {
+    if (this.hp <= 0) return;
+
+    const terrain = this.getTerrain();
+    const tcfg = TERRAIN_TYPES[terrain];
+    this.terrainBoost = tcfg.defMul;
+
+    const friendly = this.isFriendlyZone();
+    const regen = friendly ? CONFIG.staminaRegenFriendly : CONFIG.staminaRegen;
+    this.stamina = Math.min(this.maxStamina, this.stamina + regen);
+
+    if (!this.target || this.target.hp <= 0) {
+      this.target = this.findTarget();
+      if (this.state !== 'retreat') this.state = 'idle';
+    }
+
+    const hpRatio = this.hp / this.maxHp;
+    const staminaRatio = this.stamina / this.maxStamina;
+
+    if (hpRatio < 0.35 && staminaRatio < 0.3 && this.state !== 'retreat') {
+      this.state = 'retreat';
+      this.retreatTimer = 60;
+    }
+
+    let tx = this.x, ty = this.y;
+    let moveSpeed = this.speed * tcfg.speedMul;
+
+    if (this.state === 'retreat') {
+      const base = game.getFactionBase(this.factionId);
+      const angle = Math.atan2(base.y - this.y, base.x - this.x);
+      tx = this.x + Math.cos(angle) * moveSpeed;
+      ty = this.y + Math.sin(angle) * moveSpeed;
+      this.retreatTimer--;
+      if (this.retreatTimer <= 0 && hpRatio > 0.5) this.state = 'idle';
+    } else if (this.state === 'flank' && this.flankTarget && this.flankTarget.hp > 0) {
+      const angle = Math.atan2(this.flankTarget.y - this.y, this.flankTarget.x - this.x);
+      const flankAngle = angle + 1.2;
+      tx = this.x + Math.cos(flankAngle) * moveSpeed * 1.3;
+      ty = this.y + Math.sin(flankAngle) * moveSpeed * 1.3;
+      if (dist(this, this.flankTarget) < this.range * 1.5) this.state = 'attack';
+    } else if (this.target && this.target.hp > 0) {
+      const d = dist(this, this.target);
+      if (this.type === 'archer' && d > this.range * 0.5 && d < this.range * 0.9) {
+        const angle = Math.atan2(this.target.y - this.y, this.target.x - this.x);
+        const backAngle = angle + Math.PI;
+        tx = this.x + Math.cos(backAngle) * moveSpeed * 0.4;
+        ty = this.y + Math.sin(backAngle) * moveSpeed * 0.4;
+      } else if (d > this.range) {
+        const angle = Math.atan2(this.target.y - this.y, this.target.x - this.x);
+        if (this.type === 'knight' && d > 80 && staminaRatio > 0.5) moveSpeed *= this.chargeBonus;
+        tx = this.x + Math.cos(angle) * moveSpeed;
+        ty = this.y + Math.sin(angle) * moveSpeed;
+      } else {
+        if (this.cooldown <= 0 && this.stamina >= this.attackCost) this.attack();
+        if (this.type === 'archer' && d < this.range * 0.4) {
+          const angle = Math.atan2(this.y - this.target.y, this.x - this.target.x);
+          tx = this.x + Math.cos(angle) * moveSpeed * 0.6;
+          ty = this.y + Math.sin(angle) * moveSpeed * 0.6;
+        } else {
+          tx = this.x + (Math.random()-0.5) * 2;
+          ty = this.y + (Math.random()-0.5) * 2;
+        }
+      }
+    } else {
+      // 无敌人时：巡逻友方区域边界，而不是乱晃
+      this.patrolTimer++;
+      if (!this.patrolTarget || this.patrolTimer > 120 || dist(this, this.patrolTarget) < 15) {
+        this.patrolTimer = 0;
+        const enemyZone = this.getNearestEnemyFactionZone();
+        if (enemyZone) {
+          const angle = Math.atan2(enemyZone.y - this.y, enemyZone.x - this.x);
+          const patrolDist = rand(40, 100);
+          this.patrolTarget = {
+            x: clamp(this.x + Math.cos(angle + rand(-0.5, 0.5)) * patrolDist, 20, W-20),
+            y: clamp(this.y + Math.sin(angle + rand(-0.5, 0.5)) * patrolDist, 20, H-20)
+          };
+        } else {
+          this.patrolTarget = {
+            x: clamp(this.x + rand(-60, 60), 20, W-20),
+            y: clamp(this.y + rand(-60, 60), 20, H-20)
+          };
+        }
+      }
+      if (this.patrolTarget) {
+        const angle = Math.atan2(this.patrolTarget.y - this.y, this.patrolTarget.x - this.x);
+        tx = this.x + Math.cos(angle) * moveSpeed * 0.5;
+        ty = this.y + Math.sin(angle) * moveSpeed * 0.5;
+      }
+    }
+
+    const moved = dist({x:tx,y:ty}, this);
+    if (moved > 0.1) {
+      this.stamina -= this.moveCost * moved;
+      this.stamina = Math.max(0, this.stamina);
+    }
+
+    let sepX = 0, sepY = 0;
+    for (const u of game.units) {
+      if (u === this || u.factionId !== this.factionId || u.hp <= 0) continue;
+      const d = dist(this, u);
+      if (d < this.size * 3.5) {
+        const angle = Math.atan2(this.y - u.y, this.x - u.x);
+        const force = (this.size * 3.5 - d) / (this.size * 3.5);
+        sepX += Math.cos(angle) * force * 2;
+        sepY += Math.sin(angle) * force * 2;
+      }
+    }
+    tx += sepX; ty += sepY;
+
+    this.x = clamp(tx, this.size, W - this.size);
+    this.y = clamp(ty, this.size, H - this.size);
+    if (this.cooldown > 0) this.cooldown--;
+  }
+
+  attack() {
+    if (!this.target || this.target.hp <= 0) return;
+    this.stamina -= this.attackCost;
+    this.cooldown = this.type === 'knight' ? 25 : (this.type === 'archer' ? 35 : (this.type === 'mage' ? 50 : 18));
+    this.attackTimer = 8;
+
+    if (this.type === 'archer' || this.type === 'mage') {
+      game.projectiles.push(new Projectile(this.x, this.y, this.target, this.damage * (0.8 + this.level*0.2), this.factionId, this.type === 'mage'));
+    } else {
+      let dmg = this.damage * (0.9 + this.level*0.1);
+      if (this.type === 'knight' && dist(this, this.target) > 50) dmg *= this.chargeBonus;
+      this.target.takeDamage(dmg);
+      const angle = Math.atan2(this.target.y - this.y, this.target.x - this.x);
+      for (let i = 0; i < 3; i++) {
+        game.particles.push(new Particle(
+          this.x + Math.cos(angle) * (10 + i*5),
+          this.y + Math.sin(angle) * (10 + i*5),
+          '#ffffff', 1, 6, 2
+        ));
+      }
+    }
+  }
+
+  draw(ctx) {
+    if (this.hp <= 0) return;
+    const color = this.getColor();
+
+    if (this.shield > 0) {
+      ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, this.size + 4, 0, Math.PI*2);
+      ctx.stroke();
+    }
+
+    if (this.attackTimer > 0) {
+      this.attackTimer--;
+      ctx.fillStyle = 'rgba(255,255,255,0.4)';
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, this.size + 2, 0, Math.PI*2);
+      ctx.fill();
+    }
+
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.size, 0, Math.PI*2);
+    ctx.fill();
+
+    ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+    ctx.lineWidth = 1.2;
+    if (this.type === 'swordsman') {
+      ctx.beginPath();
+      ctx.moveTo(this.x - 3, this.y); ctx.lineTo(this.x + 3, this.y);
+      ctx.moveTo(this.x, this.y - 3); ctx.lineTo(this.x, this.y + 3);
+      ctx.stroke();
+    } else if (this.type === 'archer') {
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, this.size * 0.5, 0, Math.PI*2);
+      ctx.stroke();
+    } else if (this.type === 'knight') {
+      ctx.beginPath();
+      ctx.moveTo(this.x, this.y - 4);
+      ctx.lineTo(this.x + 3, this.y + 3);
+      ctx.lineTo(this.x - 3, this.y + 3);
+      ctx.closePath();
+      ctx.stroke();
+    } else if (this.type === 'mage') {
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, this.size * 0.4, 0, Math.PI*2);
+      ctx.fillStyle = 'rgba(255,255,255,0.8)';
+      ctx.fill();
+    }
+
+    if (this.level > 1) {
+      ctx.fillStyle = '#f1c40f';
+      ctx.font = 'bold 8px serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('★'.repeat(this.level-1), this.x, this.y - this.size - 9);
+    }
+
+    const hpW = this.size * 2.2;
+    const hpH = 2.5;
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.fillRect(this.x - hpW/2, this.y - this.size - 7, hpW, hpH);
+    ctx.fillStyle = this.hp / this.maxHp > 0.5 ? '#2ecc71' : (this.hp / this.maxHp > 0.25 ? '#f39c12' : '#e74c3c');
+    ctx.fillRect(this.x - hpW/2, this.y - this.size - 7, hpW * (this.hp / this.maxHp), hpH);
+
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.fillRect(this.x - hpW/2, this.y - this.size - 4, hpW, 1.5);
+    ctx.fillStyle = '#3498db';
+    ctx.fillRect(this.x - hpW/2, this.y - this.size - 4, hpW * (this.stamina / this.maxStamina), 1.5);
+
+    if (this.state === 'retreat') {
+      ctx.fillStyle = 'rgba(255,255,255,0.5)';
+      ctx.font = '9px serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('退', this.x, this.y - this.size - 10);
+    } else if (this.state === 'flank') {
+      ctx.fillStyle = 'rgba(255,255,255,0.5)';
+      ctx.font = '9px serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('插', this.x, this.y - this.size - 10);
+    }
+  }
+}
+
+class Commander {
+  constructor(factionId) {
+    this.factionId = factionId;
+    this.timer = 0;
+    this.tactic = 'normal';
+    this.tacticTimer = 0;
+  }
+  update() {
+    this.timer++;
+    if (this.timer < CONFIG.commanderInterval) return;
+    this.timer = 0;
+
+    const myUnits = game.units.filter(u => u.factionId === this.factionId && u.hp > 0);
+    const enemies = game.units.filter(u => u.factionId !== this.factionId && u.hp > 0);
+    if (myUnits.length === 0 || enemies.length === 0) return;
+
+    const myPower = myUnits.reduce((s,u) => s + u.hp + u.stamina, 0);
+    const enemyPower = enemies.reduce((s,u) => s + u.hp + u.stamina, 0);
+    const ratio = myPower / (enemyPower + 1);
+
+    let newTactic = 'normal';
+    if (ratio > 1.4) newTactic = 'blitz';
+    else if (ratio > 1.1) newTactic = 'flank';
+    else if (ratio < 0.6) newTactic = 'retreat';
+    else if (ratio < 0.9) newTactic = 'surround';
+
+    if (newTactic !== this.tactic) {
+      this.tactic = newTactic;
+      this.tacticTimer = 120;
+      const f = getFaction(this.factionId);
+      game.showTactic(f.name + ' - ' + this.getTacticName(newTactic));
+    }
+
+    for (const u of myUnits) {
+      if (u.type === 'archer' || u.type === 'mage') {
+        u.target = u.findTarget();
+        if (!u.target && enemies.length > 0) {
+          u.target = enemies[Math.floor(Math.random() * enemies.length)];
+        }
+        continue;
+      }
+
+      if (this.tactic === 'blitz') {
+        u.state = 'idle'; u.target = u.findTarget();
+      } else if (this.tactic === 'flank') {
+        const target = enemies[Math.floor(Math.random() * enemies.length)];
+        u.flankTarget = target; u.state = 'flank';
+      } else if (this.tactic === 'surround') {
+        const targets = enemies.sort((a,b) => dist(u,a) - dist(u,b)).slice(0, 3);
+        u.target = targets[Math.floor(Math.random() * targets.length)] || u.findTarget();
+        u.state = 'idle';
+      } else if (this.tactic === 'retreat') {
+        if (u.hp / u.maxHp < 0.5) u.state = 'retreat';
+        else { u.state = 'idle'; u.target = u.findTarget(); }
+      } else {
+        u.state = 'idle'; u.target = u.findTarget();
+      }
+    }
+  }
+  getTacticName(t) {
+    const names = { blitz: '闪电战', flank: '穿插突击', surround: '包围战术', retreat: '战略撤退', normal: '常规作战' };
+    return names[t] || '作战';
+  }
+}
+
+function getFaction(id) {
+  return factions.find(f => f.id === id) || factions[0];
+}
+
+const MAPS = {
+  random: {
+    name: '随机遭遇',
+    setup: (g) => {
+      g.clearTerrain();
+      const perFaction = 28;
+      factions.forEach((f, i) => {
+        const left = i === 0;
+        for (let k = 0; k < perFaction; k++) {
+          const type = k < 12 ? 'swordsman' : (k < 20 ? 'archer' : (k < 25 ? 'knight' : 'mage'));
+          const x = left ? rand(20, W*0.3) : rand(W*0.7, W-20);
+          const y = rand(20, H-20);
+          g.spawnUnit(f.id, type, x, y);
+        }
+      });
+    }
+  },
+  confrontation: {
+    name: '两军对垒',
+    setup: (g) => {
+      g.clearTerrain();
+      factions.forEach((f, i) => {
+        const left = i === 0;
+        const baseX = left ? W * 0.12 : W * 0.88;
+        for (let row = 0; row < 5; row++) {
+          for (let col = 0; col < 6; col++) {
+            const type = col < 2 ? 'knight' : (col < 4 ? 'swordsman' : (col < 5 ? 'archer' : 'mage'));
+            const x = baseX + (left ? col*22 : -col*22);
+            const y = H*0.15 + row*28;
+            g.spawnUnit(f.id, type, x, y);
+          }
+        }
+      });
+    }
+  },
+  encirclement: {
+    name: '包围战',
+    setup: (g) => {
+      g.clearTerrain();
+      const center = factions[0];
+      const surround = factions[1];
+      for (let i = 0; i < 30; i++) {
+        const angle = (i / 30) * Math.PI * 2;
+        const r = Math.min(W,H) * 0.38;
+        g.spawnUnit(surround.id, i%4===0?'knight':(i%3===0?'mage':(i%2===0?'swordsman':'archer')), W/2 + Math.cos(angle)*r, H/2 + Math.sin(angle)*r);
+      }
+      for (let i = 0; i < 24; i++) {
+        g.spawnUnit(center.id, i<8?'swordsman':(i<16?'archer':(i<20?'knight':'mage')), W/2 + rand(-50,50), H/2 + rand(-50,50));
+      }
+    }
+  },
+  landing: {
+    name: '登陆作战',
+    setup: (g) => {
+      g.clearTerrain();
+      for (let r = 3; r < CONFIG.gridRows; r++) {
+        for (let c = 0; c < CONFIG.gridCols; c++) {
+          if (Math.random() > 0.3) g.terrain[r][c] = 'river';
+        }
+      }
+      const defender = factions[0];
+      const attacker = factions[1];
+      for (let i = 0; i < 28; i++) {
+        g.spawnUnit(defender.id, i<10?'swordsman':(i<18?'archer':(i<24?'knight':'mage')), rand(W*0.3, W*0.7), rand(H*0.55, H-20));
+      }
+      for (let i = 0; i < 26; i++) {
+        g.spawnUnit(attacker.id, i<8?'knight':(i<16?'swordsman':(i<22?'archer':'mage')), rand(20, W-20), rand(20, H*0.25));
+      }
+    }
+  },
+  canyon: {
+    name: '峡谷争夺',
+    setup: (g) => {
+      g.clearTerrain();
+      const midC = Math.floor(CONFIG.gridCols / 2);
+      for (let r = 0; r < CONFIG.gridRows; r++) {
+        g.terrain[r][midC] = 'river';
+        if (r % 2 === 0) g.terrain[r][midC-1] = 'hill';
+        if (r % 2 === 1) g.terrain[r][midC+1] = 'hill';
+      }
+      factions.forEach((f, i) => {
+        const left = i === 0;
+        for (let k = 0; k < 26; k++) {
+          const type = k < 10 ? 'swordsman' : (k < 18 ? 'archer' : (k < 23 ? 'knight' : 'mage'));
+          const x = left ? rand(20, W*0.35) : rand(W*0.65, W-20);
+          const y = rand(20, H-20);
+          g.spawnUnit(f.id, type, x, y);
+        }
+      });
+    }
+  },
+  urban: {
+    name: '城市巷战',
+    setup: (g) => {
+      g.clearTerrain();
+      for (let i = 0; i < 18; i++) {
+        const r = randInt(0, CONFIG.gridRows-1);
+        const c = randInt(0, CONFIG.gridCols-1);
+        g.terrain[r][c] = 'building';
+      }
+      for (let i = 0; i < 12; i++) {
+        const r = randInt(0, CONFIG.gridRows-1);
+        const c = randInt(0, CONFIG.gridCols-1);
+        if (g.terrain[r][c] !== 'building') g.terrain[r][c] = 'forest';
+      }
+      factions.forEach((f, i) => {
+        const left = i === 0;
+        for (let k = 0; k < 28; k++) {
+          const type = k < 12 ? 'swordsman' : (k < 20 ? 'archer' : (k < 25 ? 'knight' : 'mage'));
+          const x = left ? rand(20, W*0.3) : rand(W*0.7, W-20);
+          const y = rand(20, H-20);
+          g.spawnUnit(f.id, type, x, y);
+        }
+      });
+    }
+  },
+  crossroad: {
+    name: '十字路口',
+    setup: (g) => {
+      g.clearTerrain();
+      const midC = Math.floor(CONFIG.gridCols/2);
+      const midR = Math.floor(CONFIG.gridRows/2);
+      for (let r = 0; r < CONFIG.gridRows; r++) g.terrain[r][midC] = 'river';
+      for (let c = 0; c < CONFIG.gridCols; c++) g.terrain[midR][c] = 'river';
+      for (let i = 0; i < 6; i++) {
+        const r = randInt(0, CONFIG.gridRows-1);
+        const c = randInt(0, CONFIG.gridCols-1);
+        if (g.terrain[r][c] === 'plain') g.terrain[r][c] = 'hill';
+      }
+      const positions = [
+        {x: W*0.15, y: H*0.15}, {x: W*0.85, y: H*0.15},
+        {x: W*0.15, y: H*0.85}, {x: W*0.85, y: H*0.85}
+      ];
+      factions.forEach((f, i) => {
+        const pos = positions[i % positions.length];
+        for (let k = 0; k < 24; k++) {
+          const type = k < 10 ? 'swordsman' : (k < 17 ? 'archer' : (k < 21 ? 'knight' : 'mage'));
+          g.spawnUnit(f.id, type, pos.x + rand(-40,40), pos.y + rand(-40,40));
+        }
+      });
+    }
+  },
+  islands: {
+    name: '群岛混战',
+    setup: (g) => {
+      g.clearTerrain();
+      for (let r = 0; r < CONFIG.gridRows; r++) {
+        for (let c = 0; c < CONFIG.gridCols; c++) {
+          if ((r+c)%3 !== 0) g.terrain[r][c] = 'river';
+        }
+      }
+      const islands = [{x:W*0.2,y:H*0.25},{x:W*0.8,y:H*0.25},{x:W*0.2,y:H*0.75},{x:W*0.8,y:H*0.75},{x:W*0.5,y:H*0.5}];
+      factions.forEach((f, i) => {
+        const pos = islands[i % islands.length];
+        for (let k = 0; k < 22; k++) {
+          const type = k < 9 ? 'swordsman' : (k < 16 ? 'archer' : (k < 20 ? 'knight' : 'mage'));
+          g.spawnUnit(f.id, type, pos.x + rand(-30,30), pos.y + rand(-30,30));
+        }
+      });
+    }
+  },
+  maze: {
+    name: '迷宫突围',
+    setup: (g) => {
+      g.clearTerrain();
+      for (let r = 1; r < CONFIG.gridRows-1; r+=2) {
+        for (let c = 1; c < CONFIG.gridCols-1; c+=2) {
+          g.terrain[r][c] = 'building';
+        }
+      }
+      for (let i = 0; i < 8; i++) {
+        const r = randInt(0, CONFIG.gridRows-1);
+        const c = randInt(0, CONFIG.gridCols-1);
+        g.terrain[r][c] = 'forest';
+      }
+      factions.forEach((f, i) => {
+        const left = i === 0;
+        for (let k = 0; k < 26; k++) {
+          const type = k < 11 ? 'swordsman' : (k < 19 ? 'archer' : (k < 23 ? 'knight' : 'mage'));
+          const x = left ? rand(20, W*0.25) : rand(W*0.75, W-20);
+          const y = rand(20, H-20);
+          g.spawnUnit(f.id, type, x, y);
+        }
+      });
+    }
+  },
+  fortress: {
+    name: '要塞攻防',
+    setup: (g) => {
+      g.clearTerrain();
+      const cx = Math.floor(CONFIG.gridCols/2);
+      const cy = Math.floor(CONFIG.gridRows/2);
+      for (let r = cy-2; r <= cy+2; r++) {
+        for (let c = cx-2; c <= cx+2; c++) {
+          if (r===cy-2||r===cy+2||c===cx-2||c===cx+2) g.terrain[r][c] = 'building';
+        }
+      }
+      g.terrain[cy][cx] = 'hill';
+      const defender = factions[0];
+      const attacker = factions[1];
+      for (let i = 0; i < 18; i++) {
+        const type = i<7?'swordsman':(i<13?'archer':(i<16?'knight':'mage'));
+        g.spawnUnit(defender.id, type, W/2+rand(-30,30), H/2+rand(-30,30));
+      }
+      for (let i = 0; i < 32; i++) {
+        const type = i<10?'knight':(i<20?'swordsman':(i<28?'archer':'mage'));
+        const angle = (i/32)*Math.PI*2;
+        const r = Math.min(W,H)*0.42;
+        g.spawnUnit(attacker.id, type, W/2+Math.cos(angle)*r, H/2+Math.sin(angle)*r);
+      }
+    }
+  }
+};
+
+class Game {
+  constructor() {
+    this.units = [];
+    this.particles = [];
+    this.projectiles = [];
+    this.occupation = [];
+    this.terrain = [];
+    this.running = false;
+    this.paused = false;
+    this.commanders = {};
+    this.time = 0;
+    this.frameCount = 0;
+    this.lastFpsTime = performance.now();
+    this.fps = 60;
+    this.hintEl = document.getElementById('tactic-hint');
+    this.toastEl = document.getElementById('event-toast');
+    this.hintTimer = 0;
+    this.toastTimer = 0;
+    this.eventTimer = 0;
+    this.initOccupation();
+    this.initTerrain();
+  }
+
+  initOccupation() {
+    this.occupation = [];
+    for (let r = 0; r < CONFIG.gridRows; r++) {
+      this.occupation[r] = [];
+      for (let c = 0; c < CONFIG.gridCols; c++) {
+        const obj = { total: 0 };
+        factions.forEach(f => obj[f.id] = 0);
+        this.occupation[r][c] = obj;
+      }
+    }
+  }
+
+  initTerrain() {
+    this.terrain = [];
+    for (let r = 0; r < CONFIG.gridRows; r++) {
+      this.terrain[r] = [];
+      for (let c = 0; c < CONFIG.gridCols; c++) {
+        this.terrain[r][c] = 'plain';
+      }
+    }
+  }
+
+  clearTerrain() {
+    this.initTerrain();
+  }
+
+  getFactionBase(fid) {
+    const idx = factions.findIndex(f => f.id === fid);
+    return { x: idx === 0 ? W*0.08 : (idx === 1 ? W*0.92 : W*0.5), y: H*0.5 };
+  }
+
+  showTactic(text) {
+    this.hintEl.textContent = text;
+    this.hintEl.style.opacity = '1';
+    this.hintTimer = 90;
+  }
+
+  showEvent(text) {
+    this.toastEl.textContent = text;
+    this.toastEl.style.opacity = '1';
+    this.toastTimer = 120;
+  }
+
+  spawnUnit(factionId, type, x, y) {
+    if (this.units.length >= CONFIG.maxUnits) return;
+    this.units.push(new Unit(factionId, type, x, y));
+  }
+
+  reset() {
+    this.units = [];
+    this.particles = [];
+    this.projectiles = [];
+    this.time = 0;
+    this.running = false;
+    this.paused = false;
+    this.initOccupation();
+    this.commanders = {};
+    factions.forEach(f => this.commanders[f.id] = new Commander(f.id));
+    const map = MAPS[selectedMap] || MAPS.random;
+    map.setup(this);
+    this.updateUI();
+  }
+
+  updateOccupation() {
+    for (let r = 0; r < CONFIG.gridRows; r++) {
+      for (let c = 0; c < CONFIG.gridCols; c++) {
+        const counts = {};
+        factions.forEach(f => counts[f.id] = 0);
+        const cx = (c + 0.5) * (W / CONFIG.gridCols);
+        const cy = (r + 0.5) * (H / CONFIG.gridRows);
+        const radius = Math.min(W/CONFIG.gridCols, H/CONFIG.gridRows) * 0.55;
+        for (const u of this.units) {
+          if (u.hp <= 0) continue;
+          if (dist(u, {x:cx,y:cy}) < radius) counts[u.factionId] = (counts[u.factionId]||0) + 1;
+        }
+        const occ = this.occupation[r][c];
+        let total = 0;
+        factions.forEach(f => {
+          const val = counts[f.id] || 0;
+          if (val > 0) {
+            occ[f.id] = Math.min(100, occ[f.id] + CONFIG.occupationRate * val);
+          } else {
+            occ[f.id] = Math.max(0, occ[f.id] - CONFIG.occupationDecay);
+          }
+          total += occ[f.id];
+        });
+        occ.total = total;
+      }
+    }
+  }
+
+  triggerRandomEvent() {
+    const events = [
+      () => {
+        const f = factions[Math.floor(Math.random()*factions.length)];
+        const count = randInt(2,4);
+        const base = this.getFactionBase(f.id);
+        for (let i=0;i<count;i++) {
+          this.spawnUnit(f.id, 'swordsman', base.x+rand(-30,30), base.y+rand(-30,30));
+        }
+        this.showEvent(f.name + ' 获得增援！');
+      },
+      () => {
+        for (const u of this.units) {
+          if (u.hp > 0 && Math.random() < 0.3) {
+            u.shield = 30;
+          }
+        }
+        this.showEvent('全体获得临时护盾！');
+      },
+      () => {
+        const f = factions[Math.floor(Math.random()*factions.length)];
+        for (const u of this.units) {
+          if (u.factionId === f.id && u.hp > 0) {
+            u.stamina = Math.min(u.maxStamina, u.stamina + 40);
+          }
+        }
+        this.showEvent(f.name + ' 补给到达！');
+      },
+      () => {
+        for (let r=0; r<CONFIG.gridRows; r++) {
+          for (let c=0; c<CONFIG.gridCols; c++) {
+            if (Math.random() < 0.1) this.terrain[r][c] = 'swamp';
+          }
+        }
+        this.showEvent('战场出现沼泽！');
+      }
+    ];
+    events[Math.floor(Math.random()*events.length)]();
+  }
+
+  update() {
+    if (!this.running || this.paused) return;
+    this.time += 1/60;
+    this.eventTimer++;
+
+    if (this.eventTimer > CONFIG.eventInterval) {
+      this.eventTimer = 0;
+      if (Math.random() < 0.4) this.triggerRandomEvent();
+    }
+
+    Object.values(this.commanders).forEach(cmd => cmd.update());
+
+    for (const u of this.units) u.update();
+    this.units = this.units.filter(u => u.hp > 0);
+
+    for (const p of this.projectiles) p.update();
+    this.projectiles = this.projectiles.filter(p => p.active);
+
+    for (const p of this.particles) p.update();
+    this.particles = this.particles.filter(p => p.life > 0);
+
+    this.updateOccupation();
+
+    if (this.hintTimer > 0) {
+      this.hintTimer--;
+      if (this.hintTimer <= 0) this.hintEl.style.opacity = '0';
+    }
+    if (this.toastTimer > 0) {
+      this.toastTimer--;
+      if (this.toastTimer <= 0) this.toastEl.style.opacity = '0';
+    }
+
+    this.updateUI();
+  }
+
+  drawTerrain() {
+    const cellW = W / CONFIG.gridCols;
+    const cellH = H / CONFIG.gridRows;
+    for (let r = 0; r < CONFIG.gridRows; r++) {
+      for (let c = 0; c < CONFIG.gridCols; c++) {
+        const t = this.terrain[r][c];
+        const cfg = TERRAIN_TYPES[t];
+        if (cfg.color !== 'transparent') {
+          ctx.fillStyle = cfg.color;
+          ctx.fillRect(c*cellW, r*cellH, cellW, cellH);
+        }
+        if (t === 'building') {
+          ctx.fillStyle = 'rgba(255,255,255,0.03)';
+          const bw = cellW * 0.55, bh = cellH * 0.55;
+          ctx.fillRect(c*cellW + (cellW-bw)/2, r*cellH + (cellH-bh)/2, bw, bh);
+          ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+          ctx.strokeRect(c*cellW + (cellW-bw)/2, r*cellH + (cellH-bh)/2, bw, bh);
+        } else if (t === 'forest') {
+          ctx.fillStyle = 'rgba(46, 204, 113, 0.03)';
+          for (let i = 0; i < 4; i++) {
+            const fx = c*cellW + rand(cellW*0.2, cellW*0.8);
+            const fy = r*cellH + rand(cellH*0.2, cellH*0.8);
+            ctx.beginPath(); ctx.arc(fx, fy, 3, 0, Math.PI*2); ctx.fill();
+          }
+        } else if (t === 'hill') {
+          ctx.fillStyle = 'rgba(241, 196, 15, 0.02)';
+          ctx.beginPath();
+          ctx.arc(c*cellW + cellW/2, r*cellH + cellH/2, Math.min(cellW,cellH)*0.3, 0, Math.PI*2);
+          ctx.fill();
+        } else if (t === 'river') {
+          ctx.fillStyle = 'rgba(52, 152, 219, 0.05)';
+          ctx.fillRect(c*cellW + cellW*0.35, r*cellH, cellW*0.3, cellH);
+        } else if (t === 'swamp') {
+          ctx.fillStyle = 'rgba(101, 67, 33, 0.06)';
+          for (let i=0;i<5;i++) {
+            const sx = c*cellW + rand(2, cellW-2);
+            const sy = r*cellH + rand(2, cellH-2);
+            ctx.fillRect(sx, sy, 3, 3);
+          }
+        }
+      }
+    }
+  }
+
+  drawOccupation() {
+    const cellW = W / CONFIG.gridCols;
+    const cellH = H / CONFIG.gridRows;
+    for (let r = 0; r < CONFIG.gridRows; r++) {
+      for (let c = 0; c < CONFIG.gridCols; c++) {
+        const occ = this.occupation[r][c];
+        if (occ.total <= 0) continue;
+        let maxId = null, maxVal = -1;
+        factions.forEach(f => {
+          if (occ[f.id] > maxVal) { maxVal = occ[f.id]; maxId = f.id; }
+        });
+        if (maxVal > 30) {
+          const f = getFaction(maxId);
+          ctx.fillStyle = f.color + '12';
+          ctx.fillRect(c*cellW, r*cellH, cellW, cellH);
+        }
+      }
+    }
+  }
+
+  drawFrontline() {
+    const cellW = W / CONFIG.gridCols;
+    const cellH = H / CONFIG.gridRows;
+    const time = performance.now() / 1000;
+
+    const getOwner = (r,c) => {
+      if (r<0||r>=CONFIG.gridRows||c<0||c>=CONFIG.gridCols) return null;
+      const occ = this.occupation[r][c];
+      let maxId = null, maxVal = -1;
+      factions.forEach(f => {
+        if (occ[f.id] > maxVal) { maxVal = occ[f.id]; maxId = f.id; }
+      });
+      return maxVal > 25 ? maxId : null;
+    };
+
+    ctx.save();
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = 'round';
+
+    for (let r = 0; r < CONFIG.gridRows; r++) {
+      for (let c = 0; c < CONFIG.gridCols; c++) {
+        const owner = getOwner(r,c);
+        const right = getOwner(r,c+1);
+        const down = getOwner(r+1,c);
+
+        if (owner && right && owner !== right) {
+          const f1 = getFaction(owner);
+          const f2 = getFaction(right);
+          const x = (c+1)*cellW;
+          const pulse = CONFIG.frontlinePulse ? Math.sin(time*3 + r)*0.3 + 0.7 : 1;
+          ctx.strokeStyle = f1.color;
+          ctx.globalAlpha = 0.6 * pulse;
+          ctx.beginPath();
+          ctx.moveTo(x, r*cellH + 2);
+          ctx.lineTo(x, (r+1)*cellH - 2);
+          ctx.stroke();
+          ctx.strokeStyle = f2.color;
+          ctx.globalAlpha = 0.6 * pulse;
+          ctx.beginPath();
+          ctx.moveTo(x+1, r*cellH + 2);
+          ctx.lineTo(x+1, (r+1)*cellH - 2);
+          ctx.stroke();
+        }
+
+        if (owner && down && owner !== down) {
+          const f1 = getFaction(owner);
+          const f2 = getFaction(down);
+          const y = (r+1)*cellH;
+          const pulse = CONFIG.frontlinePulse ? Math.sin(time*3 + c)*0.3 + 0.7 : 1;
+          ctx.strokeStyle = f1.color;
+          ctx.globalAlpha = 0.6 * pulse;
+          ctx.beginPath();
+          ctx.moveTo(c*cellW + 2, y);
+          ctx.lineTo((c+1)*cellW - 2, y);
+          ctx.stroke();
+          ctx.strokeStyle = f2.color;
+          ctx.globalAlpha = 0.6 * pulse;
+          ctx.beginPath();
+          ctx.moveTo(c*cellW + 2, y+1);
+          ctx.lineTo((c+1)*cellW - 2, y+1);
+          ctx.stroke();
+        }
+      }
+    }
+
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+
+  drawGridLines() {
+    const cellW = W / CONFIG.gridCols;
+    const cellH = H / CONFIG.gridRows;
+    ctx.strokeStyle = 'rgba(255,255,255,0.025)';
+    ctx.lineWidth = 0.5;
+    for (let c = 0; c <= CONFIG.gridCols; c++) {
+      ctx.beginPath();
+      ctx.moveTo(c*cellW, 0);
+      ctx.lineTo(c*cellW, H);
+      ctx.stroke();
+    }
+    for (let r = 0; r <= CONFIG.gridRows; r++) {
+      ctx.beginPath();
+      ctx.moveTo(0, r*cellH);
+      ctx.lineTo(W, r*cellH);
+      ctx.stroke();
+    }
+  }
+
+  draw() {
+    ctx.clearRect(0, 0, W, H);
+    this.drawTerrain();
+    this.drawOccupation();
+    this.drawGridLines();
+    this.drawFrontline();
+
+    for (const p of this.projectiles) p.draw(ctx);
+
+    const sorted = [...this.units].sort((a,b) => a.y - b.y);
+    for (const u of sorted) u.draw(ctx);
+
+    for (const p of this.particles) p.draw(ctx);
+
+    this.frameCount++;
+    const now = performance.now();
+    if (now - this.lastFpsTime >= 1000) {
+      this.fps = this.frameCount;
+      this.frameCount = 0;
+      this.lastFpsTime = now;
+    }
+  }
+
+  updateUI() {
+    const counts = {};
+    const hps = {};
+    const maxHps = {};
+    const staminas = {};
+    const maxStaminas = {};
+    const occCounts = {};
+    factions.forEach(f => {
+      counts[f.id] = 0; hps[f.id] = 0; maxHps[f.id] = 0;
+      staminas[f.id] = 0; maxStaminas[f.id] = 0; occCounts[f.id] = 0;
+    });
+
+    for (const u of this.units) {
+      if (u.hp <= 0) continue;
+      counts[u.factionId]++;
+      hps[u.factionId] += u.hp;
+      maxHps[u.factionId] += u.maxHp;
+      staminas[u.factionId] += u.stamina;
+      maxStaminas[u.factionId] += u.maxStamina;
+    }
+
+    let totalOcc = 0;
+    for (let r = 0; r < CONFIG.gridRows; r++) {
+      for (let c = 0; c < CONFIG.gridCols; c++) {
+        const occ = this.occupation[r][c];
+        let maxId = null, maxVal = -1;
+        factions.forEach(f => {
+          if (occ[f.id] > maxVal) { maxVal = occ[f.id]; maxId = f.id; }
+        });
+        if (maxVal > 30) { occCounts[maxId]++; totalOcc++; }
+      }
+    }
+
+    factions.forEach(f => {
+      const elCount = document.getElementById(`stat-count-${f.id}`);
+      const elSupply = document.getElementById(`stat-supply-${f.id}`);
+      const elLand = document.getElementById(`stat-land-${f.id}`);
+      const elHp = document.getElementById(`hp-bar-${f.id}`);
+      if (elCount) elCount.textContent = counts[f.id] || 0;
+      if (elSupply) elSupply.textContent = (maxStaminas[f.id] ? Math.round(staminas[f.id]/maxStaminas[f.id]*100) : 0) + '%';
+      if (elLand) elLand.textContent = (totalOcc ? Math.round((occCounts[f.id]||0)/totalOcc*100) : 0) + '%';
+      if (elHp) elHp.style.width = (maxHps[f.id] ? Math.round(hps[f.id]/maxHps[f.id]*100) : 0) + '%';
+    });
+
+    document.getElementById('total-units').textContent = this.units.filter(u=>u.hp>0).length;
+    document.getElementById('fps').textContent = this.fps;
+    document.getElementById('time').textContent = Math.floor(this.time);
+  }
+}
+
+function renderFactionBar() {
+  const bar = document.getElementById('faction-bar');
+  const addBtn = document.getElementById('add-faction-btn');
+  bar.querySelectorAll('.faction').forEach(el => el.remove());
+  factions.forEach(f => {
+    const div = document.createElement('div');
+    div.className = 'faction';
+    div.innerHTML = `
+      <div class="faction-name"><span class="faction-dot" style="background:${f.color}"></span>${f.name}</div>
+      <div class="faction-stats">
+        <span>单位: <b id="stat-count-${f.id}">0</b></span>
+        <span>补给: <b id="stat-supply-${f.id}">0%</b></span>
+        <span>占领: <b id="stat-land-${f.id}">0%</b></span>
+      </div>
+      <div class="hp-bar"><div id="hp-bar-${f.id}" style="width:100%;background:${f.color}"></div></div>
+    `;
+    bar.insertBefore(div, addBtn);
+  });
+}
+
+function renderTeamButtons() {
+  const container = document.getElementById('team-select');
+  container.innerHTML = '';
+  factions.forEach(f => {
+    const btn = document.createElement('button');
+    btn.className = 'team-btn' + (f.id === selectedFaction ? ' active' : '');
+    btn.textContent = f.name;
+    btn.style.color = f.id === selectedFaction ? f.color : '#ccc';
+    btn.style.borderColor = f.id === selectedFaction ? f.color : 'rgba(255,255,255,0.12)';
+    btn.onclick = () => { selectedFaction = f.id; renderTeamButtons(); };
+    container.appendChild(btn);
+  });
+}
+
+function openFactionModal() {
+  if (factions.length >= 6) { alert('最多支持6个阵营'); return; }
+  const opts = document.getElementById('color-options');
+  opts.innerHTML = '';
+  EXTRA_COLORS.forEach((c, i) => {
+    const div = document.createElement('div');
+    div.className = 'color-opt' + (i===0?' selected':'');
+    div.style.background = c;
+    div.dataset.color = c;
+    div.onclick = () => {
+      opts.querySelectorAll('.color-opt').forEach(el => el.classList.remove('selected'));
+      div.classList.add('selected');
+    };
+    opts.appendChild(div);
+  });
+  document.getElementById('new-faction-name').value = '';
+  document.getElementById('faction-modal').classList.add('show');
+}
+
+function closeFactionModal() {
+  document.getElementById('faction-modal').classList.remove('show');
+}
+
+function confirmAddFaction() {
+  const name = document.getElementById('new-faction-name').value.trim();
+  const selected = document.querySelector('.color-opt.selected');
+  if (!name) { alert('请输入阵营名称'); return; }
+  if (!selected) { alert('请选择颜色'); return; }
+  const color = selected.dataset.color;
+  const id = 'faction_' + Date.now();
+  factions.push({ id, name, color, colorLight: color + 'aa' });
+  game.commanders[id] = new Commander(id);
+  renderFactionBar();
+  renderTeamButtons();
+  closeFactionModal();
+  game.initOccupation();
+  game.updateUI();
+}
+
+document.getElementById('add-faction-btn').onclick = openFactionModal;
+
+document.querySelectorAll('.unit-btn').forEach(btn => {
+  btn.onclick = () => {
+    selectedUnit = btn.dataset.unit;
+    document.querySelectorAll('.unit-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  };
+});
+
+document.getElementById('map-select').onchange = (e) => {
+  selectedMap = e.target.value;
+  game.reset();
+};
+
+document.getElementById('btn-start').onclick = () => { game.running = true; game.paused = false; };
+document.getElementById('btn-pause').onclick = () => { game.paused = !game.paused; };
+document.getElementById('btn-reset').onclick = () => { game.reset(); };
+
+canvas.addEventListener('pointerdown', e => {
+  e.preventDefault();
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+  game.spawnUnit(selectedFaction, selectedUnit, x, y);
+  const fc = getFaction(selectedFaction);
+  for (let i = 0; i < 6; i++) {
+    game.particles.push(new Particle(x, y, fc.color, 2, 12, 3));
+  }
+});
+
+const game = new Game();
+
+function loop() {
+  game.update();
+  game.draw();
+  requestAnimationFrame(loop);
+}
+
+renderFactionBar();
+renderTeamButtons();
+game.reset();
+loop();
+</script>
+</body>
+</html>
