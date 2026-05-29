@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>深空探索模拟器</title>
+  <style>
+    body { margin: 0; overflow: hidden; background: #0a0a0f; color: #fff; font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; }
+    canvas { display: block; touch-action: none; }
+    #hint {
+      position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%);
+      font-size: 12px; color: rgba(183, 183, 255, 0.5); pointer-events: none; user-select: none; white-space: nowrap;
+    }
+  </style>
+</head>
+<body>
+<<canvas id="c"></canvas>
+<div id="hint">拖拽屏幕控制飞船 · 点击右下角 自动导航 按钮开启AI驾驶</div>
+<script>
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
+
+  let W, H, sf, dpr = window.devicePixelRatio || 1;
+  const gridSize = 300, worldBoundary = 200000;
+  const starVisualRadiusBase = 1500 + Math.random() * 1500;
+
+  const starNames = ["天枢星","开阳星","玉衡星","摇光星","紫微星","太微星","天市星","荧惑星","岁星","镇星"];
+  const starName = starNames[Math.floor(Math.random() * starNames.length)];
+  const starClass = ["O","B","A","F","G","K","M"][Math.floor(Math.random() * 7)];
+  const starMass = (Math.random() * 5 + 1.5).toExponential(2);
+  const starColor = `hsl(${Math.random() * 360}, 80%, 55%)`;
+
+  const planetTypes = ["金属行星","岩石行星","气态巨行星","冰冻行星","熔岩行星","海洋行星"];
+  const planetAtmos = ["恐怖大气","有毒大气","可呼吸大气","稀薄大气","浓密大气","腐蚀性大气"];
+  const planetFauna = ["纤细生物","强壮生物","飞行生物","穴居生物","歌唱生物","无生物"];
+  const planetFlora = ["歌唱植物","发光植物","食肉植物","巨型植物","微型植物","无植物"];
+  const jobs = ["享用午餐","观光游览","矿物开采","科学研究","探索未知"];
+
+  let offsetX = 5400, offsetY = 4500, angle = 0, vx = 0, vy = 0;
+  const maxSpeed = 5000, maxThrustR = 114, minThrustR = 38;
+
+  let dragging = false, startX = 0, startY = 0, lastX = 0, lastY = 0;
+  let lastTime = performance.now(), thrustPercent = 0;
+
+  let bubbles = [], sparks = [], lastBubbleTime = 0, discovered = 0;
+  let flags = [], landed = false, landedPlanet = -1, landedContact = 0, landedAngle = 0;
+  let currentJob = "", takeoffTime = 0, lastCollision = 0;
+  let lastLandedPlanet = -1;
+
+  const shipScale = 14 / 350;
+
+  const bottomPts = [
+    {x:150,y:430},{x:155,y:430},{x:160,y:430},{x:165,y:430},{x:170,y:430},
+    {x:175,y:430},{x:180,y:430},{x:185,y:430},{x:190,y:430},
+    {x:310,y:430},{x:315,y:430},{x:320,y:430},{x:325,y:430},{x:330,y:430},
+    {x:335,y:430},{x:340,y:430},{x:345,y:430},{x:350,y:430}
+  ];
+
+  const bodyPts = [
+    {x:250,y:80},{x:120,y:200},{x:380,y:200},{x:120,y:350},{x:380,y:350},{x:210,y:350},{x:290,y:350}
+  ];
+
+  const trail = [];
+  const TRAIL_LIFETIME = 240000;
+
+  let autopilot = false;
+  let apState = 'idle';
+  let apTarget = -1;
+  let searchStart = 0;
+  const SEARCH_DELAY = 3500;
+  let cameraZoom = 1, targetZoom = 1;
+
+  let smoothedSpeed = 0;
+
+  const btnSize = 44;
+  const getBtnRect = () => ({ x: W - btnSize - 14, y: H - btnSize - 70, w: btnSize, h: btnSize });
+  const isInsideButton = (px, py) => { const r = getBtnRect(); return px >= r.x && px <= r.x + r.w && py >= r.y && py <= r.y + r.h; };
+
+  const planets = [];
+  (() => {
+    const count = Math.floor(Math.random() * 8) + 3;
+    const orbits = [];
+    const minO = Math.max(starVisualRadiusBase * 1.3, 3000), maxO = worldBoundary * 0.85;
+    for (let i = 0; i < count; i++) {
+      let r;
+      do { r = minO + Math.random() * (maxO - minO); } while (orbits.some(e => Math.abs(e - r) < 2500));
+      orbits.push(r);
+    }
+    orbits.sort((a, b) => a - b);
+    orbits.forEach(r => {
+      planets.push({
+        orbit: r, angle: Math.random() * Math.PI * 2,
+        speed: (0.005 + Math.random() * 0.015) * (Math.random() < 0.5 ? 1 : -1),
+        radius: 100 + Math.random() * 900,
+        gravR: 1000 + Math.random() * 1500,
+        gravK: 2500000 + Math.random() * 3500000,
+        discovered: false,
+        name: `${starName}-${planets.length + 1}号`,
+        type: planetTypes[Math.floor(Math.random() * planetTypes.length)],
+        atmo: planetAtmos[Math.floor(Math.random() * planetAtmos.length)],
+        fauna: planetFauna[Math.floor(Math.random() * planetFauna.length)],
+        flora: planetFlora[Math.floor(Math.random() * planetFlora.length)]
+      });
+    });
+  })();
+  const totalPlanets = planets.length;
+
+  function resize() {
+    dpr = window.devicePixelRatio || 1;
+    canvas.width = innerWidth * dpr; canvas.height = innerHeight * dpr;
+    canvas.style.width = innerWidth + 'px'; canvas.style.height = innerHeight + 'px';
+    ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.scale(dpr, dpr);
+    W = innerWidth; H = innerHeight; sf = Math.min(W, H) / 800;
+  }
+  window.addEventListener('resize', resize); resize();
+
+  function normalizeAngle(a) {
+    while (a > Math.PI) a -= Math.PI * 2;
+    while (a < -Math.PI) a += Math.PI * 2;
+    return a;
+  }
+
+  function localToWorld(lx, ly) {
+    const dx = (lx - 250) * shipScale, dy = (ly - 255) * shipScale;
+    const cos = Math.cos(angle), sin = Math.sin(angle);
+    return { x: -offsetX + dx * cos - dy * sin, y: -offsetY + dx * sin + dy * cos };
+  }
+
+  function createSparks(wx, wy, count = 10) {
+    for (let i = 0; i < count; i++) {
+      const a = Math.random() * Math.PI * 2, spd = 100 + Math.random() * 150;
+      sparks.push({ x: wx, y: wy, vx: Math.cos(a) * spd, vy: Math.sin(a) * spd, age: 0, max: 0.3 + Math.random() * 0.3 });
+    }
+    if (sparks.length > 200) sparks.splice(0, sparks.length - 200);
+  }
+
+  function findBestTarget() {
+    let best = -1, bestScore = Infinity;
+    const sx = -offsetX, sy = -offsetY;
+    const velAngle = Math.atan2(vy, vx);
+    for (let i = 0; i < planets.length; i++) {
+      if (planets[i].discovered) continue;
+      const p = planets[i];
+      const px = p.orbit * sf * Math.cos(p.angle);
+      const py = p.orbit * sf * Math.sin(p.angle);
+      const dx = px - sx, dy = py - sy;
+      const dist = Math.hypot(dx, dy);
+      const dirToPlanet = Math.atan2(dy, dx);
+      const angleDiff = Math.abs(normalizeAngle(dirToPlanet - velAngle));
+      let score = dist;
+      if (angleDiff > Math.PI * 0.6) score += angleDiff * 8000;
+      if (score < bestScore) { bestScore = score; best = i; }
+    }
+    return best;
+  }
+
+  function predictRendezvous(targetIdx) {
+    const p = planets[targetIdx];
+    const sx = -offsetX, sy = -offsetY;
+    const orbR = p.orbit * sf;
+    const v = Math.max(Math.hypot(vx, vy), 150);
+    let t = Math.hypot(sx - orbR * Math.cos(p.angle), sy - orbR * Math.sin(p.angle)) / v;
+    for (let i = 0; i < 3; i++) {
+      const futureAng = p.angle + p.speed * t;
+      const px = orbR * Math.cos(futureAng);
+      const py = orbR * Math.sin(futureAng);
+      t = Math.hypot(sx - px, sy - py) / v;
+    }
+    const finalAng = p.angle + p.speed * t;
+    return { x: orbR * Math.cos(finalAng), y: orbR * Math.sin(finalAng), time: t };
+  }
+
+  function drawGrid(dSf) {
+    const ox = W / 2 + offsetX * (dSf / sf), oy = H / 2 + offsetY * (dSf / sf), gs = gridSize * dSf / sf;
+    const sx = ((ox % gs) + gs) % gs, sy = ((oy % gs) + gs) % gs;
+    ctx.beginPath(); ctx.strokeStyle = '#1a1a24'; ctx.lineWidth = 2;
+    for (let x = sx - gs; x < W + gs; x += gs) { ctx.moveTo(x, 0); ctx.lineTo(x, H); }
+    for (let y = sy - gs; y < H + gs; y += gs) { ctx.moveTo(0, y); ctx.lineTo(W, y); }
+    ctx.stroke();
+  }
+
+  function drawWorldOrigin(dSf) {
+    const ox = W / 2 + offsetX * (dSf / sf), oy = H / 2 + offsetY * (dSf / sf), len = 10 * dSf;
+    ctx.beginPath(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5;
+    ctx.moveTo(ox - len, oy); ctx.lineTo(ox + len, oy);
+    ctx.moveTo(ox, oy - len); ctx.lineTo(ox, oy + len);
+    ctx.stroke();
+  }
+
+  function drawShip(dSf) {
+    ctx.save(); ctx.translate(W / 2, H / 2);
+    ctx.rotate(landed ? landedAngle : angle);
+    const scale = shipScale * dSf / sf;
+    ctx.scale(scale, scale); ctx.translate(-250, -255);
+    ctx.beginPath();
+    ctx.moveTo(120, 400); ctx.lineTo(120, 200);
+    ctx.quadraticCurveTo(120, 80, 250, 80); ctx.quadraticCurveTo(380, 80, 380, 200);
+    ctx.lineTo(380, 400); ctx.quadraticCurveTo(380, 430, 350, 430); ctx.lineTo(310, 430);
+    ctx.quadraticCurveTo(290, 430, 290, 400); ctx.lineTo(290, 350);
+    ctx.quadraticCurveTo(290, 320, 250, 320); ctx.quadraticCurveTo(210, 320, 210, 350);
+    ctx.lineTo(210, 400); ctx.quadraticCurveTo(210, 430, 190, 430); ctx.lineTo(150, 430);
+    ctx.quadraticCurveTo(120, 430, 120, 400);
+    ctx.fillStyle = '#0a0a0f'; ctx.fill();
+    ctx.strokeStyle = '#e0e0e0'; ctx.lineWidth = 18; ctx.stroke();
+    if (!landed && thrustPercent > 0) {
+      ctx.fillStyle = '#ff6600'; ctx.beginPath();
+      ctx.moveTo(215, 430); ctx.lineTo(285, 430); ctx.lineTo(250, 510); ctx.closePath(); ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  function drawThrustRing() {
+    if (!dragging || landed) return;
+    const dx = lastX - startX, dy = lastY - startY, dist = Math.hypot(dx, dy);
+    if (!dist) return;
+    const r = Math.min(dist, maxThrustR);
+    ctx.beginPath(); ctx.strokeStyle = '#00ff00'; ctx.lineWidth = 1.5;
+    ctx.setLineDash(dist < minThrustR ? [5, 5] : []);
+    ctx.arc(startX, startY, r, 0, Math.PI * 2); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.beginPath(); ctx.moveTo(startX, startY);
+    ctx.lineTo(startX + dx / dist * r, startY + dy / dist * r);
+    ctx.stroke();
+  }
+
+  function drawStar(now, dSf) {
+    const sx = W / 2 + offsetX * (dSf / sf), sy = H / 2 + offsetY * (dSf / sf);
+    if (sx < -5000 * dSf || sx > W + 5000 * dSf || sy < -5000 * dSf || sy > H + 5000 * dSf) return;
+    ctx.save(); ctx.translate(sx, sy);
+    const maxR = starVisualRadiusBase * 3 * dSf;
+    for (let r = 6 * dSf; r <= maxR; r += (30 + r / dSf * 0.05) * dSf) {
+      const a = 0.8 * (1 - r / maxR);
+      if (a < 0.02) continue;
+      ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2);
+      ctx.strokeStyle = `rgba(255,0,0,${a})`; ctx.lineWidth = 1; ctx.stroke();
+    }
+    const t = now / 1000; ctx.strokeStyle = starColor; ctx.lineWidth = 3 * dSf;
+    ctx.beginPath();
+    for (let th = 0; th <= Math.PI * 2; th += 0.04) {
+      const r = (starVisualRadiusBase + 200 + 120 * Math.sin(th * 6 - t * 3)) * dSf;
+      th ? ctx.lineTo(r * Math.cos(th), r * Math.sin(th)) : ctx.moveTo(r * Math.cos(th), r * Math.sin(th));
+    }
+    ctx.closePath(); ctx.stroke();
+    ctx.beginPath();
+    for (let th = 0; th <= Math.PI * 2; th += 0.04) {
+      const r = (starVisualRadiusBase + 300 + 90 * Math.cos(th * 8 + t * 2.5)) * dSf;
+      th ? ctx.lineTo(r * Math.cos(th), r * Math.sin(th)) : ctx.moveTo(r * Math.cos(th), r * Math.sin(th));
+    }
+    ctx.closePath(); ctx.stroke();
+    ctx.beginPath(); ctx.arc(0, 0, starVisualRadiusBase * dSf, 0, Math.PI * 2);
+    ctx.fillStyle = starColor; ctx.fill();
+    ctx.restore();
+  }
+
+  function drawOrbits(dSf) {
+    ctx.beginPath(); ctx.strokeStyle = '#4a6fa5'; ctx.lineWidth = 1.4 * dSf;
+    planets.forEach(p => {
+      const cx = W / 2 + offsetX * (dSf / sf), cy = H / 2 + offsetY * (dSf / sf);
+      ctx.moveTo(cx + p.orbit * dSf, cy); ctx.arc(cx, cy, p.orbit * dSf, 0, Math.PI * 2);
+    });
+    ctx.stroke();
+  }
+
+  function drawBoundary(dSf) {
+    if (Math.hypot(offsetX, offsetY) < worldBoundary - 40000) return;
+    ctx.beginPath(); ctx.strokeStyle = 'rgba(255,0,0,0.5)'; ctx.lineWidth = 2.5 * dSf;
+    ctx.setLineDash([12 * dSf, 12 * dSf]);
+    ctx.arc(W / 2 + offsetX * (dSf / sf), H / 2 + offsetY * (dSf / sf), worldBoundary * dSf, 0, Math.PI * 2);
+    ctx.stroke(); ctx.setLineDash([]);
+  }
+
+  function drawPlanets(dSf) {
+    const sx = W / 2 + offsetX * (dSf / sf), sy = H / 2 + offsetY * (dSf / sf);
+    planets.forEach(p => {
+      const pr = p.radius * dSf, or = p.orbit * dSf;
+      const px = sx + or * Math.cos(p.angle), py = sy + or * Math.sin(p.angle);
+      for (let r = 6 * dSf, maxR = p.gravR * dSf; r <= maxR; r += (10 + r / dSf * 0.06) * dSf) {
+        const a = 0.7 * (1 - r / maxR);
+        if (a < 0.02) continue;
+        ctx.beginPath(); ctx.arc(px, py, r, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(255,50,50,${a})`; ctx.lineWidth = 1; ctx.stroke();
+      }
+      ctx.beginPath(); ctx.arc(px, py, pr, 0, Math.PI * 2);
+      ctx.fillStyle = '#11131a'; ctx.fill();
+      ctx.strokeStyle = '#cccccc'; ctx.lineWidth = 2 * dSf; ctx.stroke();
+    });
+  }
+
+  function drawTrail(now, dSf) {
+    const alive = trail.filter(p => now - p.time < TRAIL_LIFETIME);
+    trail.length = 0; trail.push(...alive);
+    if (trail.length < 2) return;
+    ctx.save(); ctx.beginPath();
+    ctx.strokeStyle = '#00ff00'; ctx.lineWidth = 1.2;
+    ctx.setLineDash([4, 4]);
+    const cx = W / 2 + offsetX * (dSf / sf), cy = H / 2 + offsetY * (dSf / sf);
+    const age0 = now - trail[0].time;
+    ctx.globalAlpha = Math.max(0, 1 - age0 / TRAIL_LIFETIME);
+    ctx.moveTo(cx + trail[0].x * (dSf / sf), cy + trail[0].y * (dSf / sf));
+    for (let i = 1; i < trail.length; i++) {
+      const p = trail[i], age = now - p.time;
+      ctx.globalAlpha = Math.max(0, 1 - age / TRAIL_LIFETIME);
+      ctx.lineTo(cx + p.x * (dSf / sf), cy + p.y * (dSf / sf));
+    }
+    ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+
+  function drawFlags(dSf) {
+    const now = performance.now();
+    flags = flags.filter(f => now - f.time < 60000);
+    flags.forEach(f => {
+      const p = planets[f.idx];
+      const px = p.orbit * dSf * Math.cos(p.angle), py = p.orbit * dSf * Math.sin(p.angle);
+      const pr = p.radius * dSf;
+      const sx = W / 2 + offsetX * (dSf / sf) + px + Math.cos(f.angle) * pr;
+      const sy = H / 2 + offsetY * (dSf / sf) + py + Math.sin(f.angle) * pr;
+      const fh = 32 * dSf, fw = 18 * dSf;
+      ctx.save(); ctx.translate(sx, sy); ctx.rotate(f.angle + Math.PI / 2);
+      ctx.strokeStyle = '#ffcc00'; ctx.lineWidth = 2.2 * dSf;
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, -fh * 1.2); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, -fh * 1.2); ctx.lineTo(fw, -fh * 1.2 + fw * 0.5); ctx.lineTo(0, -fh * 1.2 + fw); ctx.closePath(); ctx.stroke();
+      ctx.restore();
+    });
+  }
+
+  function drawParticles(dSf) {
+    if (!landed) {
+      const cosA = Math.cos(angle), sinA = Math.sin(angle);
+      bubbles.forEach(b => {
+        if (b.age >= b.max) return;
+        const a = 1 - b.age / b.max;
+        const sx = W / 2 + (b.lx * cosA - b.ly * sinA), sy = H / 2 + (b.lx * sinA + b.ly * cosA);
+        const r = (2 + b.age * 12) * (dSf / sf);
+        ctx.beginPath(); ctx.arc(sx, sy, r, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(255,255,255,${a})`; ctx.lineWidth = 1 * (dSf / sf); ctx.stroke();
+      });
+    }
+    sparks.forEach(s => {
+      if (s.age >= s.max) return;
+      const a = 1 - s.age / s.max;
+      const sx = W / 2 + offsetX * (dSf / sf) + s.x * (dSf / sf), sy = H / 2 + offsetY * (dSf / sf) + s.y * (dSf / sf);
+      ctx.beginPath(); ctx.arc(sx, sy, 2.5 * (dSf / sf), 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(255,255,190,${a})`; ctx.fill();
+    });
+  }
+
+  function drawAutopilotGuide(now, dSf) {
+    if (!autopilot || landed || apTarget === -1) return;
+    const p = planets[apTarget];
+    const sx = W / 2, sy = H / 2;
+    const meet = predictRendezvous(apTarget);
+    const tx = W / 2 + offsetX * (dSf / sf) + meet.x * (dSf / sf);
+    const ty = H / 2 + offsetY * (dSf / sf) + meet.y * (dSf / sf);
+    const px = W / 2 + offsetX * (dSf / sf) + p.orbit * dSf * Math.cos(p.angle);
+    const py = H / 2 + offsetY * (dSf / sf) + p.orbit * dSf * Math.sin(p.angle);
+
+    ctx.beginPath(); ctx.strokeStyle = '#1E88FD'; ctx.lineWidth = 0.8;
+    ctx.setLineDash([3, 5]); ctx.moveTo(sx, sy); ctx.lineTo(tx, ty); ctx.stroke();
+    ctx.setLineDash([]);
+
+    const polyR = Math.max(35, p.radius * dSf * 1.5);
+    const sides = 17, rot = now / 1200;
+    ctx.beginPath(); ctx.strokeStyle = '#1E88FD'; ctx.lineWidth = 1.2;
+    for (let i = 0; i <= sides; i++) {
+      const a = (i / sides) * Math.PI * 2 + rot;
+      const vx = px + Math.cos(a) * polyR;
+      const vy = py + Math.sin(a) * polyR;
+      i === 0 ? ctx.moveTo(vx, vy) : ctx.lineTo(vx, vy);
+    }
+    ctx.closePath(); ctx.stroke();
+  }
+
+  function drawHUD(now) {
+    const dSf = sf * cameraZoom, left = 18, fs = 12, lh = 16, yBase = H - 40;
+    ctx.font = `300 ${fs}px monospace`; ctx.fillStyle = '#B7B7FF'; ctx.textAlign = 'left';
+    const lines = [
+      `推力: ${Math.round(thrustPercent)}%`,
+      `坐标: <${Math.round(-offsetX)}, ${Math.round(-offsetY)}>`,
+      `速度: ${landed ? 0 : Math.min(Math.round(Math.hypot(vx, vy)), maxSpeed)}`
+    ];
+    if (landed) { lines.push(`着陆: ${planets[landedPlanet].name}`, `任务: ${currentJob}`); }
+    const yStart = yBase - lines.length * lh;
+    lines.forEach((l, i) => ctx.fillText(l, left, yStart + i * lh));
+
+    if (autopilot) {
+      ctx.font = `300 ${fs}px monospace`; ctx.fillStyle = '#1E88FD';
+      const autoLines = ["---- 自动导航已启动 ----"];
+      if (landed || apState === 'idle') {
+        autoLines.push("目标: 选择中...", "状态: 着陆中");
+      } else if (apState === 'searching') {
+        autoLines.push("目标: 计算中...", "状态: 搜索");
+      } else if (apTarget !== -1) {
+        const p = planets[apTarget];
+        const meet = predictRendezvous(apTarget);
+        const dist = Math.hypot(-offsetX - meet.x, -offsetY - meet.y);
+        const speed = Math.hypot(vx, vy);
+        const eta = speed > 10 ? Math.ceil(dist / speed) : 999;
+        autoLines.push(`目标: ${p.name}`, `状态: 追踪中 (距离=${Math.round(dist)}  预计=${eta}秒)`);
+      }
+      const autoY = yStart - autoLines.length * lh - 4;
+      autoLines.forEach((l, i) => ctx.fillText(l, left, autoY + i * lh));
+    }
+
+    let y = 24;
+    ctx.font = `300 ${fs}px monospace`; ctx.fillStyle = '#B7B7FF';
+    ctx.fillText(`恒星: ${starName}`, left, y); y += lh;
+    ctx.fillText(`光谱: ${starClass}型`, left, y); y += lh;
+    ctx.fillText(`半径: ${Math.round(starVisualRadiusBase)}`, left, y); y += lh;
+    ctx.fillText(`质量: ${starMass}`, left, y); y += lh;
+    ctx.fillText(`发现: ${discovered}/${totalPlanets} 颗行星`, left, y); y += lh;
+    planets.filter(p => p.discovered).sort((a, b) => a.orbit - b.orbit).forEach(bp => {
+      y += 2; ctx.font = `300 ${fs - 1}px monospace`;
+      ctx.fillText(`行星: ${bp.name}`, left, y); y += lh - 2;
+      ctx.fillText(`类型: ${bp.type}`, left + 6, y); y += lh - 2;
+      ctx.fillText(`大气: ${bp.atmo}`, left + 6, y); y += lh - 2;
+      ctx.fillText(`动物: ${bp.fauna}`, left + 6, y); y += lh - 2;
+      ctx.fillText(`植物: ${bp.flora}`, left + 6, y); y += lh - 2;
+    });
+
+    const rect = getBtnRect();
+    ctx.beginPath(); ctx.strokeStyle = '#B7B7FF'; ctx.lineWidth = 2;
+    ctx.rect(rect.x, rect.y, rect.w, rect.h);
+    if (autopilot) { ctx.fillStyle = '#1E88FD'; ctx.fill(); }
+    ctx.stroke();
+    ctx.font = '500 11px monospace'; ctx.fillStyle = '#B7B7FF';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('自动导航', rect.x + rect.w / 2, rect.y + rect.h / 2);
+  }
+
+  // 自动导航核心：连续速度规划 + 提前刹车检查
+  function updateAutopilot(dt, now) {
+    if (!autopilot || landed) return;
+
+    if (apState === 'idle') {
+      apState = 'searching'; searchStart = now; thrustPercent = 0; apTarget = -1;
+    } else if (apState === 'searching') {
+      if (now - searchStart >= SEARCH_DELAY) {
+        apTarget = findBestTarget();
+        apState = apTarget !== -1 ? 'chasing' : 'idle';
+        searchStart = 0;
+      }
+    } else if (apState === 'chasing') {
+      if (apTarget === -1 || planets[apTarget].discovered) {
+        apTarget = -1; apState = 'idle'; searchStart = now; return;
+      }
+
+      const p = planets[apTarget];
+      const sx = -offsetX, sy = -offsetY;
+      
+      // 行星当前位置和速度
+      const px = p.orbit * sf * Math.cos(p.angle);
+      const py = p.orbit * sf * Math.sin(p.angle);
+      const pvx = -p.orbit * sf * Math.sin(p.angle) * p.speed;
+      const pvy = p.orbit * sf * Math.cos(p.angle) * p.speed;
+      
+      // 相对位置与距离
+      const rdx = px - sx, rdy = py - sy;
+      const dist = Math.hypot(rdx, rdy);
+      const dirToTarget = Math.atan2(rdy, rdx);
+      
+      // 相对速度（相对于行星）
+      const rvx = vx - pvx, rvy = vy - pvy;
+      const rSpeed = Math.hypot(rvx, rvy);
+      
+      // 最大可用减速度（保守估计）
+      const maxA = 380;
+      
+      // ===== 速度规划：到达行为（Arrive）=====
+      // 基础思路：期望相对速度 = 距离 / 时间常数，确保能平滑停下
+      let desiredRelSpeed;
+      if (dist > 20000) desiredRelSpeed = dist / 12;
+      else if (dist > 8000) desiredRelSpeed = dist / 8;
+      else if (dist > 3000) desiredRelSpeed = dist / 5;
+      else if (dist > 1000) desiredRelSpeed = dist / 3.5;
+      else if (dist > 400) desiredRelSpeed = dist / 2.5;
+      else desiredRelSpeed = dist / 2;
+      
+      // 硬上限：不同距离段允许的最高速度
+      if (dist > 30000) desiredRelSpeed = Math.min(desiredRelSpeed, 2200);
+      else if (dist > 12000) desiredRelSpeed = Math.min(desiredRelSpeed, 1600);
+      else if (dist > 5000) desiredRelSpeed = Math.min(desiredRelSpeed, 700);
+      else if (dist > 2000) desiredRelSpeed = Math.min(desiredRelSpeed, 280);
+      else if (dist > 800) desiredRelSpeed = Math.min(desiredRelSpeed, 100);
+      else if (dist > 300) desiredRelSpeed = Math.min(desiredRelSpeed, 45);
+      else desiredRelSpeed = Math.min(desiredRelSpeed, 25); // 最后几像素极低速
+      
+      // ===== 关键：提前刹车检查 =====
+      // 计算以当前相对速度刹停所需距离：d_brake = v^2 / (2*a)
+      // 如果刹车距离超过剩余距离的 50%，必须强制降低期望速度，防止掠过
+      const brakeDist = (rSpeed * rSpeed) / (2 * maxA);
+      if (brakeDist > dist * 0.55 && dist > 200) {
+        // 紧急减速：要求速度降到能在剩余距离内停下
+        desiredRelSpeed = Math.min(desiredRelSpeed, Math.sqrt(2 * maxA * dist * 0.4));
+      }
+      
+      // ===== 计算期望绝对速度 =====
+      // 远距离：直接朝向目标飞行
+      // 中距离：混合行星速度（开始匹配轨道）
+      let desiredVx, desiredVy;
+      if (dist > 6000) {
+        desiredVx = pvx + Math.cos(dirToTarget) * desiredRelSpeed;
+        desiredVy = pvy + Math.sin(dirToTarget) * desiredRelSpeed;
+      } else {
+        // 接近阶段：更多考虑行星运动，减少相对速度
+        const blend = Math.min(1, dist / 6000); // 1.0~0.0
+        desiredVx = pvx + Math.cos(dirToTarget) * desiredRelSpeed * blend + rvx * (1 - blend) * 0.3;
+        desiredVy = pvy + Math.sin(dirToTarget) * desiredRelSpeed * blend + rvy * (1 - blend) * 0.3;
+      }
+      
+      // 速度误差 = 期望绝对速度 - 当前绝对速度
+      const vErrX = desiredVx - vx;
+      const vErrY = desiredVy - vy;
+      const vErrMag = Math.hypot(vErrX, vErrY);
+      const vErrDir = Math.atan2(vErrY, vErrX);
+      
+      // 期望机头方向（推进方向 = 机头方向 - PI/2）
+      const desiredAngle = vErrDir + Math.PI / 2;
+      
+      // 平滑转向
+      let angleDiff = normalizeAngle(desiredAngle - angle);
+      const turnRate = 9.0;
+      angle += Math.sign(angleDiff) * Math.min(Math.abs(angleDiff), turnRate * dt);
+      
+      // ===== 推力控制 =====
+      const alignment = Math.cos(angleDiff); // 机头与期望推进方向的对齐程度
+      
+      if (alignment > 0.85 && vErrMag > 50) {
+        // 对准良好，且速度有偏差，适度推进
+        thrustPercent = Math.min(70, 12 + vErrMag * 0.045);
+      } else if (alignment > 0.5 && vErrMag > 100) {
+        // 大致对准
+        thrustPercent = Math.min(40, 8 + vErrMag * 0.03);
+      } else if (vErrMag < 30) {
+        // 速度已足够准确，滑行
+        thrustPercent = 0;
+      } else {
+        // 未对准，先转向，几乎不推或微推
+        thrustPercent = Math.max(0, alignment) * Math.min(20, vErrMag * 0.015);
+      }
+      
+      // ===== 极近距离强制刹车 =====
+      // 如果已经靠得很近但相对速度仍然太快，直接对准相对速度反方向喷气刹车
+      const surfaceDist = dist - p.radius * sf;
+      if (surfaceDist < p.radius * sf * 2.5 && rSpeed > 80) {
+        const retroDir = Math.atan2(-rvy, -rvx);
+        const retroAngle = retroDir + Math.PI / 2;
+        let retroDiff = normalizeAngle(retroAngle - angle);
+        // 紧急转向，允许更快转向速率
+        angle += Math.sign(retroDiff) * Math.min(Math.abs(retroDiff), turnRate * 1.8 * dt);
+        if (Math.abs(retroDiff) < 0.5 && rSpeed > 60) {
+          thrustPercent = Math.min(55, rSpeed * 0.25);
+        }
+      }
+      
+      // 动态视角缩放
+      const worldSpan = dist + p.radius * sf * 5 + 400;
+      targetZoom = Math.min(1.6, Math.max(0.22, Math.min(W, H) * 0.5 / worldSpan * sf));
+    }
+  }
+
+  function update(now) {
+    let dt = Math.min((now - lastTime) / 1000, 0.1);
+    lastTime = now;
+    const dSf = sf * cameraZoom;
+
+    const currentSpeed = Math.hypot(vx, vy);
+    smoothedSpeed += (currentSpeed - smoothedSpeed) * 0.05;
+
+    // 自动导航状态机
+    if (autopilot && !landed) {
+      updateAutopilot(dt, now);
+    } else if (!autopilot) {
+      thrustPercent = 0;
+      targetZoom = 1;
+    }
+
+    // 玩家手动控制覆盖自动导航
+    const playerActive = dragging;
+    if (playerActive) {
+      thrustPercent = 0;
+      const dx = lastX - startX, dy = lastY - startY, r = Math.hypot(dx, dy);
+      if (r > 0.01) {
+        angle = Math.atan2(dy, dx) + Math.PI / 2;
+        if (r >= minThrustR) thrustPercent = Math.min(100, (r - minThrustR) / (maxThrustR - minThrustR) * 100);
+      }
+      targetZoom = 1;
+    }
+
+    cameraZoom += (targetZoom - cameraZoom) * 0.08;
+
+    // 起飞
+    if (landed && thrustPercent > 0) {
+      const p = planets[landedPlanet];
+      lastLandedPlanet = landedPlanet;
+      landed = false; takeoffTime = now;
+      const px = p.orbit * sf * Math.cos(p.angle), py = p.orbit * sf * Math.sin(p.angle);
+      const safeDist = p.radius * sf + 40;
+      offsetX = -(px + Math.cos(landedContact) * safeDist);
+      offsetY = -(py + Math.sin(landedContact) * safeDist);
+      vx = Math.cos(landedContact) * 500;
+      vy = Math.sin(landedContact) * 500;
+      trail.length = 0;
+      apState = 'idle'; apTarget = -1; targetZoom = 1;
+      smoothedSpeed = 0;
+    }
+
+    // 物理与碰撞
+    if (!landed) {
+      let sx = -offsetX, sy = -offsetY;
+      if (playerActive && thrustPercent > 0) {
+        const dx = lastX - startX, dy = lastY - startY;
+        const a = 600 * thrustPercent / 100;
+        const d = Math.hypot(dx, dy);
+        vx += (dx / d) * a * dt;
+        vy += (dy / d) * a * dt;
+      } else if (autopilot && thrustPercent > 0) {
+        const a = 600 * thrustPercent / 100;
+        const dirX = Math.cos(angle - Math.PI / 2), dirY = Math.sin(angle - Math.PI / 2);
+        vx += dirX * a * dt;
+        vy += dirY * a * dt;
+      }
+
+      // 恒星引力
+      const dStar = Math.hypot(sx, sy);
+      if (dStar > 0.001) {
+        const g = 6000000 / (dStar * dStar + 500 * 500);
+        vx += (-sx / dStar) * g * dt;
+        vy += (-sy / dStar) * g * dt;
+      }
+
+      // 行星引力与碰撞
+      if (now - takeoffTime > 300) {
+        for (let i = 0; i < planets.length; i++) {
+          const p = planets[i], px = p.orbit * sf * Math.cos(p.angle), py = p.orbit * sf * Math.sin(p.angle), pr = p.radius * sf;
+          const dx = sx - px, dy = sy - py, dist = Math.hypot(dx, dy);
+
+          if (i !== lastLandedPlanet || now - takeoffTime > 1000) {
+            if (dist > 0.001) {
+              const g = p.gravK / (dist * dist + 80 * 80);
+              vx += (-dx / dist) * g * dt;
+              vy += (-dy / dist) * g * dt;
+            }
+          }
+
+          // 底部着陆检测
+          let bottom = false;
+          for (let bp of bottomPts) {
+            const w = localToWorld(bp.x, bp.y);
+            if (Math.hypot(w.x - px, w.y - py) < pr) { bottom = true; break; }
+          }
+          if (bottom) {
+            if (!p.discovered) { p.discovered = true; discovered++; }
+            landed = true; landedPlanet = i;
+            landedContact = Math.atan2(sy - py, sx - px); landedAngle = landedContact + Math.PI / 2;
+            currentJob = jobs[Math.floor(Math.random() * jobs.length)];
+            const low = localToWorld(250, 430), aLow = Math.atan2(low.y - py, low.x - px);
+            sx = px + Math.cos(aLow) * (pr - 1); sy = py + Math.sin(aLow) * (pr - 1);
+            offsetX = -sx; offsetY = -sy; vx = vy = 0; thrustPercent = 0;
+            flags.push({ idx: i, angle: landedContact, time: now });
+            apState = 'idle'; apTarget = -1; targetZoom = 1;
+            smoothedSpeed = 0;
+            break;
+          }
+
+          // 船体碰撞
+          if (now - lastCollision > 200) {
+            let hit = false, hx, hy;
+            for (let bp of bodyPts) {
+              const w = localToWorld(bp.x, bp.y);
+              if (Math.hypot(w.x - px, w.y - py) < pr) { hit = true; hx = w.x; hy = w.y; break; }
+            }
+            if (hit) {
+              const dHit = Math.hypot(hx - px, hy - py), nx = (hx - px) / dHit, ny = (hy - py) / dHit;
+              const pushOut = pr + 1 - dHit;
+              sx += nx * pushOut; sy += ny * pushOut; offsetX = -sx; offsetY = -sy;
+              const vn = vx * nx + vy * ny;
+              if (vn < 0) { vx -= 2 * vn * nx; vy -= 2 * vn * ny; }
+              vx += nx * 50; vy += ny * 50;
+              const spd = Math.hypot(vx, vy); if (spd > maxSpeed) { const s = maxSpeed / spd; vx *= s; vy *= s; }
+              createSparks(hx, hy, 12); lastCollision = now;
+              if (!p.discovered) { p.discovered = true; discovered++; }
+              break;
+            }
+          }
+        }
+      }
+
+      // 世界边界
+      const dOrigin = Math.hypot(sx, sy);
+      if (dOrigin > worldBoundary) {
+        const nx = sx / dOrigin, ny = sy / dOrigin;
+        sx = nx * worldBoundary; sy = ny * worldBoundary; offsetX = -sx; offsetY = -sy;
+        if (vx * nx + vy * ny > 0) { const vn = vx * nx + vy * ny; vx -= vn * nx; vy -= vn * ny; }
+      }
+
+      offsetX -= vx * dt; offsetY -= vy * dt;
+      trail.push({ x: -offsetX, y: -offsetY, time: now });
+      if (trail.length > 20000) trail.shift();
+    } else {
+      const p = planets[landedPlanet];
+      const px = p.orbit * sf * Math.cos(p.angle), py = p.orbit * sf * Math.sin(p.angle);
+      offsetX = -(px + Math.cos(landedContact) * (p.radius * sf - 1));
+      offsetY = -(py + Math.sin(landedContact) * (p.radius * sf - 1));
+      vx = vy = 0; lastLandedPlanet = -1;
+      trail.push({ x: -offsetX, y: -offsetY, time: now });
+    }
+
+    planets.forEach(p => p.angle += p.speed * dt);
+
+    // 粒子
+    if (!landed && thrustPercent > 0 && now - lastBubbleTime > 35) {
+      lastBubbleTime = now; bubbles.push({ lx: 0, ly: 0, age: 0, max: 0.5 });
+      if (bubbles.length > 150) bubbles.splice(0, 30);
+    }
+    bubbles.forEach(b => { b.ly += (70 + Math.random() * 130) * dt; b.lx += (Math.random() - 0.5) * 160 * dt; b.age += dt; });
+    bubbles = bubbles.filter(b => b.age < b.max);
+    sparks.forEach(s => { s.x += s.vx * dt; s.y += s.vy * dt; s.age += dt; });
+    sparks = sparks.filter(s => s.age < s.max).slice(-60);
+
+    const spd = Math.hypot(vx, vy); if (spd > maxSpeed) { const s = maxSpeed / spd; vx *= s; vy *= s; }
+
+    // 绘制
+    ctx.clearRect(0, 0, W, H);
+    drawGrid(dSf); drawWorldOrigin(dSf); drawOrbits(dSf); drawBoundary(dSf);
+    drawPlanets(dSf); drawStar(now, dSf); drawShip(dSf);
+    drawAutopilotGuide(now, dSf); drawTrail(now, dSf); drawThrustRing();
+    drawParticles(dSf); drawFlags(dSf); drawHUD(now);
+    requestAnimationFrame(update);
+  }
+
+  // 交互
+  canvas.addEventListener('mousedown', e => {
+    e.preventDefault();
+    if (isInsideButton(e.clientX, e.clientY)) {
+      autopilot = !autopilot;
+      if (!autopilot) { apState = 'idle'; apTarget = -1; targetZoom = 1; }
+      return;
+    }
+    dragging = true; startX = lastX = e.clientX; startY = lastY = e.clientY;
+  });
+  canvas.addEventListener('mousemove', e => { if (dragging) { lastX = e.clientX; lastY = e.clientY; } });
+  canvas.addEventListener('mouseup', () => dragging = false);
+  canvas.addEventListener('mouseleave', () => dragging = false);
+  canvas.addEventListener('touchstart', e => {
+    e.preventDefault();
+    const t = e.touches[0];
+    if (isInsideButton(t.clientX, t.clientY)) {
+      autopilot = !autopilot;
+      if (!autopilot) { apState = 'idle'; apTarget = -1; targetZoom = 1; }
+      return;
+    }
+    dragging = true; startX = lastX = t.clientX; startY = lastY = t.clientY;
+  }, { passive: false });
+  canvas.addEventListener('touchmove', e => {
+    e.preventDefault();
+    if (dragging) { const t = e.touches[0]; lastX = t.clientX; lastY = t.clientY; }
+  }, { passive: false });
+  canvas.addEventListener('touchend', () => dragging = false);
+  canvas.addEventListener('touchcancel', () => dragging = false);
+
+  requestAnimationFrame(update);
+</script>
+</body>
+</html>
