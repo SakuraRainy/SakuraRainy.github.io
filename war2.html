@@ -1,0 +1,1459 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>卫星战场 - 空地一体战术</title>
+<link href="https://unpkg.com/maplibre-gl@4.5.0/dist/maplibre-gl.css" rel="stylesheet" />
+<script src="https://unpkg.com/maplibre-gl@4.5.0/dist/maplibre-gl.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+    background: #0a0a0a;
+    color: #fff;
+    overflow: hidden;
+}
+#map { width: 100vw; height: 100vh; }
+
+.top-bar {
+    position: fixed; top: 0; left: 0; right: 0;
+    background: rgba(0,0,0,0.85); backdrop-filter: blur(10px);
+    padding: 8px 16px; display: flex; align-items: center;
+    justify-content: space-between; z-index: 1000;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+    flex-wrap: wrap;
+    gap: 4px;
+}
+.top-bar h1 { font-size: 15px; color: #4fc3f7; display: flex; align-items: center; gap: 6px; }
+.top-bar h1::before { content: '🛰️'; }
+
+.controls { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.btn {
+    padding: 6px 12px; border: none; border-radius: 5px;
+    cursor: pointer; font-size: 11px; font-weight: 600;
+    transition: all 0.2s; display: flex; align-items: center; gap: 3px;
+}
+.btn:hover { transform: translateY(-1px); }
+.btn-blue { background: #1976d2; color: white; }
+.btn-red { background: #d32f2f; color: white; }
+.btn-green { background: #388e3c; color: white; }
+.btn-orange { background: #f57c00; color: white; }
+.btn-gray { background: #616161; color: white; }
+.btn-purple { background: #7b1fa2; color: white; }
+.btn-purple-red { background: #6a1b9a; color: white; }
+.btn-cyan { background: #00838f; color: white; }
+.btn-cyan-red { background: #006064; color: white; }
+
+.unit-select {
+    background: rgba(0,0,0,0.6);
+    color: #fff;
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 4px;
+    padding: 5px 8px;
+    font-size: 11px;
+    outline: none;
+    cursor: pointer;
+    font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+}
+.unit-select option {
+    background: #1a1a1a;
+    color: #fff;
+    font-size: 11px;
+}
+
+.mode-indicator {
+    padding: 4px 8px; background: rgba(255,255,255,0.1);
+    border-radius: 4px; font-size: 10px; color: #aaa;
+    white-space: nowrap;
+}
+.mode-indicator.active {
+    background: rgba(79,195,247,0.2); color: #4fc3f7;
+    border: 1px solid rgba(79,195,247,0.3);
+}
+
+.side-panel {
+    position: fixed; right: 0; top: 55px; bottom: 0;
+    width: 280px; background: rgba(0,0,0,0.92);
+    backdrop-filter: blur(10px);
+    border-left: 1px solid rgba(255,255,255,0.1);
+    z-index: 1000; padding: 12px; overflow-y: auto;
+    transform: translateX(0); transition: transform 0.3s;
+}
+.side-panel.collapsed { transform: translateX(100%); }
+
+.panel-section { margin-bottom: 14px; }
+.panel-section h3 {
+    font-size: 11px; color: #888; text-transform: uppercase;
+    letter-spacing: 1px; margin-bottom: 8px;
+    padding-bottom: 5px; border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+.stat-row {
+    display: flex; justify-content: space-between;
+    padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,0.05);
+    font-size: 11px;
+}
+.stat-row .label { color: #aaa; }
+.stat-row .value { font-weight: 600; }
+.value.blue { color: #4fc3f7; }
+.value.red { color: #ff5252; }
+.value.purple { color: #ce93d8; }
+.value.cyan { color: #80deea; }
+.value.orange { color: #ff9800; }
+.value.green { color: #81c784; }
+.value.yellow { color: #ffeb3b; }
+
+.soldier-list { max-height: 160px; overflow-y: auto; }
+.soldier-item {
+    display: flex; align-items: center; gap: 6px;
+    padding: 5px; background: rgba(255,255,255,0.03);
+    border-radius: 4px; margin-bottom: 4px;
+    font-size: 10px; cursor: pointer; transition: background 0.2s;
+}
+.soldier-item:hover { background: rgba(255,255,255,0.08); }
+.soldier-icon {
+    width: 22px; height: 22px; border-radius: 3px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: bold; color: white;
+}
+.soldier-icon.blue { background: rgba(25,118,210,0.5); }
+.soldier-icon.red { background: rgba(211,47,47,0.5); }
+.soldier-icon.heli { background: rgba(123,31,162,0.5); }
+.soldier-icon.jet { background: rgba(0,131,143,0.5); }
+.soldier-icon.aa { background: rgba(255,193,7,0.5); }
+.hp-bar {
+    width: 40px; height: 3px;
+    background: rgba(255,255,255,0.1);
+    border-radius: 2px; overflow: hidden;
+}
+.hp-bar-fill { height: 100%; background: #4caf50; transition: width 0.3s; }
+
+.battle-log { max-height: 120px; overflow-y: auto; font-size: 9px; line-height: 1.4; }
+.log-entry { padding: 2px 0; border-bottom: 1px solid rgba(255,255,255,0.03); color: #bbb; }
+.log-entry.attack { color: #ff5252; }
+.log-entry.spawn { color: #4fc3f7; }
+.log-entry.death { color: #ff9800; }
+.log-entry.shoot { color: #ffeb3b; }
+.log-entry.retreat { color: #ff9800; }
+.log-entry.heal { color: #81c784; }
+.log-entry.heli { color: #ce93d8; }
+.log-entry.jet { color: #80deea; }
+.log-entry.vehicle { color: #ff9800; }
+.log-entry.aa { color: #ffeb3b; }
+
+.bottom-hint {
+    position: fixed; bottom: 16px; left: 50%;
+    transform: translateX(-50%); background: rgba(0,0,0,0.8);
+    padding: 6px 16px; border-radius: 30px;
+    font-size: 11px; color: #ccc; z-index: 1000;
+    pointer-events: none; transition: opacity 0.3s;
+}
+
+.soldier-marker-el { will-change: transform; }
+
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+.attacking { animation: pulse 0.2s ease 2; }
+
+@keyframes explode { 0%{transform:scale(1);opacity:1} 100%{transform:scale(2.5);opacity:0} }
+.explosion {
+    position: absolute; width: 14px; height: 14px;
+    background: radial-gradient(circle, #ff9800, transparent);
+    border-radius: 50%; pointer-events: none;
+    animation: explode 0.4s ease forwards; z-index: 500;
+}
+
+@keyframes hit-flash { 0%{opacity:1} 100%{opacity:0} }
+.hit-marker {
+    position: absolute; width: 10px; height: 10px;
+    background: radial-gradient(circle, #fff, #ff5252, transparent);
+    border-radius: 50%; pointer-events: none;
+    animation: hit-flash 0.3s ease forwards; z-index: 450;
+}
+
+.panel-toggle {
+    position: fixed; right: 300px; top: 70px; z-index: 1001;
+    background: rgba(0,0,0,0.8); border: 1px solid rgba(255,255,255,0.2);
+    color: white; width: 26px; height: 26px;
+    border-radius: 6px 0 0 6px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: right 0.3s;
+}
+.panel-toggle.collapsed { right: 0; }
+</style>
+</head>
+<body>
+<div class="top-bar">
+    <h1>卫星战场</h1>
+    <div class="controls">
+        <span class="mode-indicator active" id="modeIndicator">🖱️ 点击放置蓝军步兵</span>
+        <select id="unitTypeSelect" class="unit-select" onchange="setGroundType(this.value)">
+            <option value="infantry">🪖 步兵</option>
+            <option value="tank">🛡️ 坦克</option>
+            <option value="ifv">🚙 步战车</option>
+            <option value="spg">🔥 自行火炮</option>
+            <option value="mlrs">🚀 火箭炮</option>
+            <option value="apc">🚛 装甲车</option>
+            <option value="aa">🎯 防空车</option>
+        </select>
+        <button class="btn btn-blue" onclick="setMode('blue')">🔵 蓝军</button>
+        <button class="btn btn-red" onclick="setMode('red')">🔴 红军</button>
+        <button class="btn btn-purple" onclick="setMode('heli')">🚁 蓝直</button>
+        <button class="btn btn-purple-red" onclick="setMode('heli_red')">🚁 红直</button>
+        <button class="btn btn-cyan" onclick="setMode('jet')">✈️ 蓝机</button>
+        <button class="btn btn-cyan-red" onclick="setMode('jet_red')">✈️ 红机</button>
+        <button class="btn btn-green" onclick="startBattle()">⚔️ 战斗</button>
+        <button class="btn btn-orange" onclick="resetBattle()">🔄 重置</button>
+        <button class="btn btn-gray" onclick="togglePanel()">📊</button>
+    </div>
+</div>
+
+<button class="panel-toggle" id="panelToggle" onclick="togglePanel()">◀</button>
+
+<div class="side-panel" id="sidePanel">
+    <div class="panel-section">
+        <h3>📈 战场统计</h3>
+        <div class="stat-row"><span class="label">蓝军步兵</span><span class="value blue" id="blueCount">0</span></div>
+        <div class="stat-row"><span class="label">红军步兵</span><span class="value red" id="redCount">0</span></div>
+        <div class="stat-row"><span class="label">蓝军坦克</span><span class="value blue" id="blueTankCount">0</span></div>
+        <div class="stat-row"><span class="label">红军坦克</span><span class="value red" id="redTankCount">0</span></div>
+        <div class="stat-row"><span class="label">蓝军步战车</span><span class="value blue" id="blueIfvCount">0</span></div>
+        <div class="stat-row"><span class="label">红军步战车</span><span class="value red" id="redIfvCount">0</span></div>
+        <div class="stat-row"><span class="label">蓝军自行火炮</span><span class="value blue" id="blueSpgCount">0</span></div>
+        <div class="stat-row"><span class="label">红军自行火炮</span><span class="value red" id="redSpgCount">0</span></div>
+        <div class="stat-row"><span class="label">蓝军火箭炮</span><span class="value blue" id="blueMlrsCount">0</span></div>
+        <div class="stat-row"><span class="label">红军火箭炮</span><span class="value red" id="redMlrsCount">0</span></div>
+        <div class="stat-row"><span class="label">蓝军装甲车</span><span class="value blue" id="blueApcCount">0</span></div>
+        <div class="stat-row"><span class="label">红军装甲车</span><span class="value red" id="redApcCount">0</span></div>
+        <div class="stat-row"><span class="label">蓝军防空车</span><span class="value yellow" id="blueAaCount">0</span></div>
+        <div class="stat-row"><span class="label">红军防空车</span><span class="value yellow" id="redAaCount">0</span></div>
+        <div class="stat-row"><span class="label">蓝军武直</span><span class="value purple" id="blueHeliCount">0</span></div>
+        <div class="stat-row"><span class="label">红军武直</span><span class="value purple" id="redHeliCount">0</span></div>
+        <div class="stat-row"><span class="label">蓝军战机</span><span class="value cyan" id="blueJetCount">0</span></div>
+        <div class="stat-row"><span class="label">红军战机</span><span class="value cyan" id="redJetCount">0</span></div>
+        <div class="stat-row"><span class="label">战斗状态</span><span class="value" id="battleStatus">准备中</span></div>
+    </div>
+    <div class="panel-section">
+        <h3>🔵 蓝军部队</h3>
+        <div class="soldier-list" id="blueList"></div>
+    </div>
+    <div class="panel-section">
+        <h3>🔴 红军部队</h3>
+        <div class="soldier-list" id="redList"></div>
+    </div>
+    <div class="panel-section">
+        <h3>📜 战斗日志</h3>
+        <div class="battle-log" id="battleLog"></div>
+    </div>
+</div>
+
+<div class="bottom-hint" id="bottomHint">点击地图放置单位，地面载具只能在道路上机动，战机免疫地面火力</div>
+<div id="map"></div>
+
+<script>
+let map, currentMode = 'blue', currentGroundType = 'infantry', units = [], battleActive = false;
+let battleInterval = null, unitIdCounter = 0;
+let blueDead = 0, redDead = 0;
+
+const REAL_WORLD_SCALE = 111000;
+const TICK_INTERVAL = 250;
+const SOLDIER_RUN_SPEED_MPS = 4.5;
+const OFFROAD_SPEED_RATIO = 0.25;
+const VEHICLE_OFFROAD_RATIO = 0.1;
+const HELI_SPEED_MPS = 55;
+const JET_SPEED_MPS = 250;
+
+function speedToDegPerTick(mps) {
+    return (mps * (TICK_INTERVAL / 1000)) / REAL_WORLD_SCALE;
+}
+
+const squadNames = {
+    blue: ['Alpha','Bravo','Charlie','Delta','Echo','Foxtrot','Ghost','Hawk','Iron','Joker'],
+    red: ['Viper','Cobra','Scorpion','Wolf','Raven','Shadow','Storm','Thunder','Venom','Reaper']
+};
+const heliNames = { blue: ['Apache','Cobra','Huey','Blackhawk','Comanche'], red: ['Hind','Havoc','Ka-50','Mi-28','Hokum'] };
+const jetNames = { blue: ['F-16','F-22','F-35','A-10','F-15'], red: ['Su-27','MiG-29','Su-35','MiG-31','Su-25'] };
+const vehicleNames = {
+    blue: {
+        tank: ['M1A2','Leopard','Challenger','Type-99','Merkava'],
+        ifv: ['Bradley','Warrior','Puma','CV90','Lynx'],
+        spg: ['Paladin','PzH2000','Archer','K9','CAESAR'],
+        mlrs: ['HIMARS','M270','LARS','Pinaka','APR-40'],
+        apc: ['Stryker','Boxer','Piranha','Patria','LAV'],
+        aa: ['Patriot','Avenger','Roland','Gepard','Skyguard']
+    },
+    red: {
+        tank: ['T-90','T-80','T-72','Armata','T-14'],
+        ifv: ['BMP-2','BMP-3','BMD-4','Kurganets','T-15'],
+        spg: ['Msta-S','Koalitsiya','2S19','Gvozdika','Akatsiya'],
+        mlrs: ['Smerch','Uragan','Tornado','Grad','TOS-1'],
+        apc: ['BTR-80','BTR-82','MT-LB','BTR-4','K-16'],
+        aa: ['Pantsir','Tor','Buk','S-300','Shilka']
+    }
+};
+const vehicleDisplayNames = { tank: '坦克', ifv: '步战车', spg: '自行火炮', mlrs: '火箭炮', apc: '装甲车', aa: '防空车' };
+const vehicleIcons = { tank: '🛡️', ifv: '🚙', spg: '🔥', mlrs: '🚀', apc: '🚛', aa: '🎯' };
+
+function generateName(team, type) {
+    if (type === 'infantry') {
+        const names = squadNames[team];
+        return names[Math.floor(Math.random()*names.length)] + '-' + (Math.floor(Math.random()*9)+1);
+    } else if (type === 'heli') {
+        const names = heliNames[team];
+        return names[Math.floor(Math.random()*names.length)] + '-' + (Math.floor(Math.random()*9)+1);
+    } else if (type === 'jet') {
+        const names = jetNames[team];
+        return names[Math.floor(Math.random()*names.length)] + '-' + (Math.floor(Math.random()*9)+1);
+    } else {
+        const names = vehicleNames[team][type];
+        return names[Math.floor(Math.random()*names.length)] + '-' + (Math.floor(Math.random()*99)+1);
+    }
+}
+
+// ==================== 音效 ====================
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+function playGunshotSound(team) {
+    try {
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        const noise = audioCtx.createBufferSource();
+        const bufferSize = audioCtx.sampleRate * 0.15;
+        const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.1));
+        noise.buffer = buffer;
+        const gain = audioCtx.createGain();
+        gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
+        noise.connect(gain);
+        gain.connect(audioCtx.destination);
+        noise.start();
+    } catch(e) {}
+}
+
+function playCannonSound() {
+    try {
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        const bufferSize = audioCtx.sampleRate * 0.4;
+        const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.08));
+        const noise = audioCtx.createBufferSource();
+        noise.buffer = buffer;
+        const gain = audioCtx.createGain();
+        gain.gain.setValueAtTime(0.6, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
+        const filter = audioCtx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(400, audioCtx.currentTime);
+        noise.connect(filter);
+        filter.connect(gain);
+        gain.connect(audioCtx.destination);
+        noise.start();
+    } catch(e) {}
+}
+
+function playRocketSound() {
+    try {
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        const noise = audioCtx.createBufferSource();
+        const bufferSize = audioCtx.sampleRate * 0.5;
+        const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) data[i] = (Math.random() * 2 - 1);
+        noise.buffer = buffer;
+        const filter = audioCtx.createBiquadFilter();
+        filter.type = 'bandpass';
+        filter.frequency.setValueAtTime(300, audioCtx.currentTime);
+        filter.Q.setValueAtTime(0.5, audioCtx.currentTime);
+        const gain = audioCtx.createGain();
+        gain.gain.setValueAtTime(0.4, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
+        noise.connect(filter);
+        filter.connect(gain);
+        gain.connect(audioCtx.destination);
+        noise.start();
+    } catch(e) {}
+}
+
+function playAASound() {
+    try {
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        const noise = audioCtx.createBufferSource();
+        const bufferSize = audioCtx.sampleRate * 0.2;
+        const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.05));
+        noise.buffer = buffer;
+        const gain = audioCtx.createGain();
+        gain.gain.setValueAtTime(0.35, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.2);
+        const filter = audioCtx.createBiquadFilter();
+        filter.type = 'highpass';
+        filter.frequency.setValueAtTime(1500, audioCtx.currentTime);
+        noise.connect(filter);
+        filter.connect(gain);
+        gain.connect(audioCtx.destination);
+        noise.start();
+    } catch(e) {}
+}
+
+function playExplosionSound() {
+    try {
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        const bufferSize = audioCtx.sampleRate * 0.3;
+        const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.15));
+        const noise = audioCtx.createBufferSource();
+        noise.buffer = buffer;
+        const gain = audioCtx.createGain();
+        gain.gain.setValueAtTime(0.5, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+        const filter = audioCtx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(800, audioCtx.currentTime);
+        noise.connect(filter);
+        filter.connect(gain);
+        gain.connect(audioCtx.destination);
+        noise.start();
+    } catch(e) {}
+}
+
+function playHeliSound() {
+    try {
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(80, audioCtx.currentTime);
+        osc.frequency.linearRampToValueAtTime(85, audioCtx.currentTime + 0.1);
+        gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.2);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.2);
+    } catch(e) {}
+}
+
+function playJetSound() {
+    try {
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        const noise = audioCtx.createBufferSource();
+        const bufferSize = audioCtx.sampleRate * 0.3;
+        const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) data[i] = (Math.random() * 2 - 1);
+        noise.buffer = buffer;
+        const filter = audioCtx.createBiquadFilter();
+        filter.type = 'highpass';
+        filter.frequency.setValueAtTime(200, audioCtx.currentTime);
+        const gain = audioCtx.createGain();
+        gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+        noise.connect(filter);
+        filter.connect(gain);
+        gain.connect(audioCtx.destination);
+        noise.start();
+    } catch(e) {}
+}
+
+function projectPointToSegment(px, py, x1, y1, x2, y2) {
+    const dx = x2 - x1, dy = y2 - y1;
+    const len2 = dx*dx + dy*dy;
+    if (len2 === 0) return { x: x1, y: y1 };
+    let t = ((px - x1) * dx + (py - y1) * dy) / len2;
+    t = Math.max(0, Math.min(1, t));
+    return { x: x1 + t * dx, y: y1 + t * dy };
+}
+
+function findNearestRoad(lng, lat, radiusPx = 50) {
+    try {
+        const pt = map.project([lng, lat]);
+        const features = map.queryRenderedFeatures(
+            [[pt.x - radiusPx, pt.y - radiusPx], [pt.x + radiusPx, pt.y + radiusPx]],
+            { source: 'openmaptiles' }
+        );
+        let best = null, bestDist = Infinity;
+        for (const f of features) {
+            if (f.sourceLayer !== 'transportation') continue;
+            const cls = f.properties.class || '';
+            if (cls === 'rail' || cls === 'transit' || cls === 'aeroway') continue;
+            const geom = f.geometry;
+            let coords = [];
+            if (geom.type === 'LineString') coords = geom.coordinates;
+            else if (geom.type === 'MultiLineString') { for (const line of geom.coordinates) coords.push(...line); continue; }
+            else continue;
+            for (let i = 0; i < coords.length - 1; i++) {
+                const p1 = map.project(coords[i]);
+                const p2 = map.project(coords[i+1]);
+                const proj = projectPointToSegment(pt.x, pt.y, p1.x, p1.y, p2.x, p2.y);
+                const dist = Math.hypot(proj.x - pt.x, proj.y - pt.y);
+                if (dist < bestDist) { bestDist = dist; best = { point: map.unproject([proj.x, proj.y]), distance: dist }; }
+            }
+        }
+        return best;
+    } catch(e) { return null; }
+}
+
+async function initMap() {
+    let style;
+    try {
+        const res = await fetch('https://tiles.openfreemap.org/styles/liberty');
+        style = await res.json();
+        delete style.sources['ne2_shaded'];
+        style.layers = style.layers.filter(l => {
+            const id = l.id.toLowerCase();
+            if (['background','road_area_pattern','airport','aeroway_fill'].includes(id)) return false;
+            if (['building','boundary','water','landuse','landcover','park','natural'].some(k => id.includes(k))) return false;
+            if (id.startsWith('poi_') || id.startsWith('label_')) return false;
+            const keep = ['road','bridge','tunnel','aeroway_runway','aeroway_taxiway','highway','rail','transit_rail','road_one_way'];
+            return keep.some(k => id.includes(k));
+        });
+        style.sources['esri-satellite'] = {
+            type: 'raster',
+            tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
+            tileSize: 256, attribution: 'Esri', maxzoom: 19
+        };
+        style.layers.unshift({ id: 'satellite', type: 'raster', source: 'esri-satellite', paint: { 'raster-opacity': 1 } });
+    } catch(e) {
+        style = {
+            version: 8,
+            sources: { 'esri-satellite': { type: 'raster', tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'], tileSize: 256, attribution: 'Esri', maxzoom: 19 } },
+            layers: [{ id: 'satellite', type: 'raster', source: 'esri-satellite' }]
+        };
+    }
+    map = new maplibregl.Map({ container: 'map', style: style, center: [116.4074, 39.9042], zoom: 16, attributionControl: false });
+    map.addControl(new maplibregl.NavigationControl(), 'bottom-right');
+    map.on('click', (e) => { if (!battleActive) spawnUnit(e.lngLat, currentMode); });
+    updateHint('点击地图放置单位，地面载具只能在道路上机动，战机免疫地面火力');
+}
+
+function createBullet(fromLngLat, toLngLat, team, isAir = false, isHeavy = false) {
+    const color = team === 'blue' ? '#4fc3f7' : '#ff5252';
+    const bulletId = 'bullet-' + Date.now() + '-' + Math.random().toString(36).substr(2,5);
+    try {
+        map.addSource(bulletId, {
+            type: 'geojson',
+            data: { type: 'Feature', geometry: { type: 'LineString', coordinates: [fromLngLat, toLngLat] } }
+        });
+        map.addLayer({
+            id: bulletId, type: 'line', source: bulletId,
+            paint: { 
+                'line-color': color, 
+                'line-width': isHeavy ? 3 : (isAir ? 2.5 : 1.5), 
+                'line-dasharray': isAir ? [4,2] : (isHeavy ? [6,3] : [2,2]) 
+            }
+        });
+        setTimeout(() => { if (map.getLayer(bulletId)) map.removeLayer(bulletId); if (map.getSource(bulletId)) map.removeSource(bulletId); }, isHeavy ? 600 : (isAir ? 400 : 250));
+    } catch(e) {}
+    const toPoint = map.project(toLngLat);
+    const hit = document.createElement('div');
+    hit.className = 'hit-marker';
+    hit.style.left = (toPoint.x - 5) + 'px';
+    hit.style.top = (toPoint.y - 5) + 'px';
+    document.getElementById('map').appendChild(hit);
+    setTimeout(() => hit.remove(), 300);
+}
+
+// ==================== 基础单位类 ====================
+class Unit {
+    constructor(lngLat, team, type) {
+        this.id = ++unitIdCounter;
+        this.team = team;
+        this.type = type;
+        this.name = generateName(team, type);
+        this.lng = lngLat.lng;
+        this.lat = lngLat.lat;
+        this.hp = 100;
+        this.maxHp = 100;
+        this.alive = true;
+        this.marker = null;
+        this.rangeMarker = null;
+        this.selected = false;
+        this.cooldown = 0;
+        this.target = null;
+        this.state = 'combat';
+    }
+    
+    distanceTo(other) {
+        const dx = this.lat - other.lat;
+        const dy = this.lng - other.lng;
+        return Math.sqrt(dx*dx + dy*dy);
+    }
+    
+    findTarget() {
+        let closest = null, minDist = Infinity;
+        for (let u of units) {
+            if (u.team !== this.team && u.alive) {
+                const dist = this.distanceTo(u);
+                if (dist < minDist) { minDist = dist; closest = u; }
+            }
+        }
+        this.target = closest;
+        return closest;
+    }
+    
+    // 防空免疫：战机免疫地面火力，只有防空单位/空中单位能打
+    canBeHitBy(attacker) {
+        if (this.type !== 'jet') return true;
+        // 战机免疫地面单位火力
+        const groundTypes = ['infantry', 'tank', 'ifv', 'spg', 'mlrs', 'apc'];
+        if (groundTypes.includes(attacker.type)) return false;
+        return true;
+    }
+    
+    takeDamage(damage, attacker) {
+        if (!this.canBeHitBy(attacker)) {
+            // 免疫提示，偶尔显示
+            if (Math.random() < 0.05) {
+                addLog(`✈️${this.name} 闪避了 ${attacker.name} 的地面火力！`, 'jet');
+            }
+            return false;
+        }
+        this.hp -= damage;
+        if (this.hp <= 0) { this.die(attacker); return true; }
+        return false;
+    }
+    
+    die(attacker) {
+        this.alive = false;
+        this.hp = 0;
+        playExplosionSound();
+        const point = map.project([this.lng, this.lat]);
+        const explosion = document.createElement('div');
+        explosion.className = 'explosion';
+        explosion.style.left = (point.x - 7) + 'px';
+        explosion.style.top = (point.y - 7) + 'px';
+        document.getElementById('map').appendChild(explosion);
+        setTimeout(() => explosion.remove(), 400);
+        this.marker.remove();
+        if (this.rangeMarker) this.rangeMarker.remove();
+        if (this.team === 'blue') blueDead++; else redDead++;
+        const typeName = vehicleDisplayNames[this.type] || (this.type === 'infantry' ? '' : this.type === 'heli' ? '武直' : '战机');
+        addLog(`${this.team==='blue'?'🔵':'🔴'}${typeName}${this.name} 被 ${attacker.name} 摧毁！`, 'death');
+        updateStats();
+    }
+    
+    updatePosition() {
+        this.marker.setLngLat([this.lng, this.lat]);
+        if (this.rangeMarker) this.rangeMarker.setLngLat([this.lng, this.lat]);
+    }
+}
+
+// ==================== 步兵 ====================
+class Infantry extends Unit {
+    constructor(lngLat, team) {
+        super(lngLat, team, 'infantry');
+        
+        const road = findNearestRoad(lngLat.lng, lngLat.lat, 60);
+        if (road && road.distance < 40) {
+            this.lng = road.point.lng; this.lat = road.point.lat; this.onRoad = true;
+        } else { this.onRoad = false; }
+        
+        this.attack = 12 + Math.random() * 8;
+        this.defense = 3 + Math.random() * 4;
+        this.baseSpeed = speedToDegPerTick(SOLDIER_RUN_SPEED_MPS);
+        this.range = 0.0045;
+        this.retreatThreshold = 0.35;
+        this.retreatDistance = 0.006;
+        this.healRate = 0.3;
+        this.healThreshold = 0.75;
+        this.createMarker();
+    }
+    
+    createMarker() {
+        const bgColor = this.team === 'blue' ? 'rgba(25,118,210,0.9)' : 'rgba(211,47,47,0.9)';
+        const borderColor = this.selected ? '#ffd700' : 'rgba(255,255,255,0.4)';
+        const terrainIcon = this.onRoad ? '🛣️' : '🏚️';
+        const stateIcon = this.state === 'retreat' ? '🔙' : this.state === 'healing' ? '💚' : '⚔️';
+        
+        const el = document.createElement('div');
+        el.className = 'soldier-marker-el';
+        el.innerHTML = `<div style="width:54px;background:${bgColor};border:${this.selected?2:1}px solid ${borderColor};border-radius:2px;display:flex;flex-direction:column;align-items:center;padding:1px 2px;box-shadow:0 1px 6px rgba(0,0,0,0.7);font-family:'Segoe UI','Microsoft YaHei',sans-serif;"><div style="font-size:9px;font-weight:700;color:#fff;letter-spacing:0.2px;text-shadow:0 1px 2px rgba(0,0,0,0.5);white-space:nowrap;line-height:1;">${this.name}</div><div style="width:100%;height:1px;background:rgba(255,255,255,0.2);margin:1px 0;"></div><div style="width:100%;height:2px;background:rgba(0,0,0,0.4);border-radius:1px;overflow:hidden;"><div style="width:${(this.hp/this.maxHp)*100}%;height:100%;background:${this.hp>50?'#4caf50':this.hp>25?'#ff9800':'#f44336'};transition:width 0.3s;"></div></div><div style="font-size:7px;color:rgba(255,255,255,0.7);margin-top:1px;line-height:1;">${Math.ceil(this.hp)} ${terrainIcon} ${stateIcon}</div></div>`;
+        el.style.cursor = 'pointer';
+        el.addEventListener('click', (e) => { e.stopPropagation(); this.toggleSelect(); });
+        
+        this.marker = new maplibregl.Marker({ element: el, anchor: 'center' }).setLngLat([this.lng, this.lat]).addTo(map);
+        
+        const circleColor = this.team === 'blue' ? 'rgba(25,118,210,0.5)' : 'rgba(211,47,47,0.5)';
+        const circleEl = document.createElement('div');
+        circleEl.style.cssText = `width:200px;height:200px;border:1px dashed ${circleColor};border-radius:50%;background:${circleColor.replace('0.5','0.02')};pointer-events:none;`;
+        this.rangeMarker = new maplibregl.Marker({ element: circleEl, anchor: 'center' }).setLngLat([this.lng, this.lat]).addTo(map);
+    }
+    
+    toggleSelect() { this.selected = !this.selected; this.updateMarker(); }
+    
+    updateMarker() {
+        if (!this.alive) return;
+        const bgColor = this.team === 'blue' ? 'rgba(25,118,210,0.9)' : 'rgba(211,47,47,0.9)';
+        const borderColor = this.selected ? '#ffd700' : 'rgba(255,255,255,0.4)';
+        const terrainIcon = this.onRoad ? '🛣️' : '🏚️';
+        const stateIcon = this.state === 'retreat' ? '🔙' : this.state === 'healing' ? '💚' : '⚔️';
+        const el = this.marker.getElement();
+        el.innerHTML = `<div style="width:54px;background:${bgColor};border:${this.selected?2:1}px solid ${borderColor};border-radius:2px;display:flex;flex-direction:column;align-items:center;padding:1px 2px;box-shadow:0 1px 6px rgba(0,0,0,0.7);font-family:'Segoe UI','Microsoft YaHei',sans-serif;"><div style="font-size:9px;font-weight:700;color:#fff;letter-spacing:0.2px;text-shadow:0 1px 2px rgba(0,0,0,0.5);white-space:nowrap;line-height:1;">${this.name}</div><div style="width:100%;height:1px;background:rgba(255,255,255,0.2);margin:1px 0;"></div><div style="width:100%;height:2px;background:rgba(0,0,0,0.4);border-radius:1px;overflow:hidden;"><div style="width:${(this.hp/this.maxHp)*100}%;height:100%;background:${this.hp>50?'#4caf50':this.hp>25?'#ff9800':'#f44336'};transition:width 0.3s;"></div></div><div style="font-size:7px;color:rgba(255,255,255,0.7);margin-top:1px;line-height:1;">${Math.ceil(this.hp)} ${terrainIcon} ${stateIcon}</div></div>`;
+    }
+    
+    findRetreatDirection() {
+        if (!this.target) return null;
+        const dx = this.lat - this.target.lat;
+        const dy = this.lng - this.target.lng;
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        if (dist === 0) return null;
+        return { lat: this.lat + (dx/dist)*this.retreatDistance, lng: this.lng + (dy/dist)*this.retreatDistance };
+    }
+    
+    moveToRetreat() {
+        const retreatPoint = this.findRetreatDirection();
+        if (!retreatPoint) return;
+        const dx = retreatPoint.lat - this.lat;
+        const dy = retreatPoint.lng - this.lng;
+        const moveDist = Math.sqrt(dx*dx + dy*dy);
+        if (moveDist === 0) return;
+        const retreatSpeed = this.baseSpeed * 1.2;
+        let newLat = this.lat + (dx/moveDist)*retreatSpeed;
+        let newLng = this.lng + (dy/moveDist)*retreatSpeed;
+        const road = findNearestRoad(newLng, newLat, 50);
+        if (road && road.distance < 30) { newLng = road.point.lng; newLat = road.point.lat; this.onRoad = true; }
+        else { this.onRoad = false; }
+        this.lat = newLat; this.lng = newLng; this.updatePosition();
+    }
+    
+    moveToTarget() {
+        if (!this.target || !this.target.alive) { this.target = null; return; }
+        const dist = this.distanceTo(this.target);
+        if (dist <= this.range * 0.9) return;
+        const dx = this.target.lat - this.lat;
+        const dy = this.target.lng - this.lng;
+        const moveDist = Math.sqrt(dx*dx + dy*dy);
+        if (moveDist === 0) return;
+        let newLat = this.lat + (dx/moveDist)*this.baseSpeed;
+        let newLng = this.lng + (dy/moveDist)*this.baseSpeed;
+        const road = findNearestRoad(newLng, newLat, 50);
+        if (road && road.distance < 30) { newLng = road.point.lng; newLat = road.point.lat; this.onRoad = true; this.speed = this.baseSpeed; }
+        else {
+            this.onRoad = false; this.speed = this.baseSpeed * OFFROAD_SPEED_RATIO;
+            newLat = this.lat + (dx/moveDist)*this.speed;
+            newLng = this.lng + (dy/moveDist)*this.speed;
+        }
+        this.lat = newLat; this.lng = newLng; this.updatePosition();
+    }
+    
+    attackTarget() {
+        if (!this.target || !this.target.alive) return;
+        if (this.cooldown > 0) { this.cooldown--; return; }
+        const dist = this.distanceTo(this.target);
+        if (dist <= this.range) {
+            const damage = Math.max(3, this.attack - (this.target.defense || 0) + Math.random() * 6);
+            createBullet([this.lng, this.lat], [this.target.lng, this.target.lat], this.team);
+            this.target.takeDamage(damage, this);
+            this.cooldown = 3;
+            playGunshotSound(this.team);
+            this.marker.getElement().classList.add('attacking');
+            setTimeout(() => { this.marker.getElement().classList.remove('attacking'); }, 200);
+        }
+    }
+    
+    heal() {
+        if (this.hp >= this.maxHp) {
+            this.hp = this.maxHp;
+            if (this.state === 'healing') { this.state = 'combat'; addLog(`${this.team==='blue'?'🔵':'🔴'}${this.name} 伤势恢复，重返战场！`, 'heal'); }
+            return;
+        }
+        this.hp = Math.min(this.maxHp, this.hp + this.healRate);
+        this.updateMarker();
+    }
+    
+    update() {
+        if (!this.alive) return;
+        this.findTarget();
+        if (this.state === 'retreat') {
+            if (!this.target) { this.state = 'healing'; return; }
+            const distToEnemy = this.distanceTo(this.target);
+            if (distToEnemy < this.retreatDistance) this.moveToRetreat();
+            else { this.state = 'healing'; addLog(`${this.team==='blue'?'🔵':'🔴'}${this.name} 到达安全位置，开始包扎！`, 'heal'); }
+        }
+        else if (this.state === 'healing') {
+            this.heal();
+            if (this.target && this.distanceTo(this.target) < this.range * 0.5) {
+                if (this.hp / this.maxHp <= this.retreatThreshold) { this.state = 'retreat'; addLog(`${this.team==='blue'?'🔵':'🔴'}${this.name} 敌人逼近，继续撤退！`, 'retreat'); }
+                else { this.state = 'combat'; addLog(`${this.team==='blue'?'🔵':'🔴'}${this.name} 伤势好转，投入战斗！`, 'heal'); }
+            }
+            if (this.hp / this.maxHp >= this.healThreshold) { this.state = 'combat'; addLog(`${this.team==='blue'?'🔵':'🔴'}${this.name} 伤势恢复，重返战场！`, 'heal'); }
+        }
+        else {
+            if (this.hp / this.maxHp <= this.retreatThreshold) { this.state = 'retreat'; addLog(`${this.team==='blue'?'🔵':'🔴'}${this.name} 受伤严重，开始撤退！`, 'retreat'); return; }
+            if (this.target) { this.moveToTarget(); this.attackTarget(); }
+        }
+    }
+}
+
+// ==================== 地面载具 ====================
+class Vehicle extends Unit {
+    constructor(lngLat, team, vehicleType) {
+        super(lngLat, team, vehicleType);
+        
+        const road = findNearestRoad(lngLat.lng, lngLat.lat, 80);
+        if (road && road.distance < 50) {
+            this.lng = road.point.lng; this.lat = road.point.lat; this.onRoad = true;
+        } else {
+            const roadFar = findNearestRoad(lngLat.lng, lngLat.lat, 150);
+            if (roadFar && roadFar.distance < 100) {
+                this.lng = roadFar.point.lng; this.lat = roadFar.point.lat; this.onRoad = true;
+            } else {
+                this.onRoad = false;
+            }
+        }
+        
+        this.vehicleType = vehicleType;
+        this.setVehicleStats(vehicleType);
+        this.createMarker();
+    }
+    
+    setVehicleStats(type) {
+        const stats = {
+            tank:     { hp: 500, speed: 13, attack: 45, defense: 18, range: 0.006,  cooldown: 4,  retreatTh: 0.3, healRt: 0.4 },
+            ifv:      { hp: 300, speed: 18, attack: 28, defense: 10, range: 0.005,  cooldown: 3,  retreatTh: 0.35, healRt: 0.5 },
+            spg:      { hp: 250, speed: 10, attack: 90, defense: 4,  range: 0.016,  cooldown: 8,  retreatTh: 0.5, healRt: 0.3 },
+            mlrs:     { hp: 200, speed: 8,  attack: 70, defense: 3,  range: 0.020,  cooldown: 10, retreatTh: 0.5, healRt: 0.2 },
+            apc:      { hp: 180, speed: 22, attack: 12, defense: 5,  range: 0.0035, cooldown: 2,  retreatTh: 0.25, healRt: 0.6 },
+            aa:       { hp: 220, speed: 20, attackAir: 55, attackGround: 5, defense: 6, range: 0.018, cooldown: 3, retreatTh: 0.4, healRt: 0.4 }
+        };
+        const s = stats[type];
+        this.maxHp = s.hp;
+        this.hp = s.hp;
+        this.baseSpeed = speedToDegPerTick(s.speed);
+        this.defense = s.defense;
+        this.range = s.range;
+        this.maxCooldown = s.cooldown;
+        this.retreatThreshold = s.retreatTh;
+        this.retreatDistance = 0.008;
+        this.healRate = s.healRt;
+        this.healThreshold = 0.8;
+        this.displayName = vehicleDisplayNames[type];
+        this.icon = vehicleIcons[type];
+        
+        if (type === 'aa') {
+            this.attackAir = s.attackAir + Math.random() * 10;
+            this.attackGround = s.attackGround;
+        } else {
+            this.attack = s.attack + Math.random() * (s.attack * 0.15);
+        }
+    }
+    
+    createMarker() {
+        const teamColor = this.team === 'blue' ? '25,118,210' : '211,47,47';
+        const bgColor = `rgba(${teamColor},0.9)`;
+        const borderColor = this.selected ? '#ffd700' : 'rgba(255,255,255,0.4)';
+        const stateIcon = this.state === 'retreat' ? '🔙' : this.state === 'healing' ? '🔧' : '⚔️';
+        
+        const el = document.createElement('div');
+        el.className = 'soldier-marker-el';
+        el.innerHTML = `<div style="width:58px;background:${bgColor};border:${this.selected?2:1}px solid ${borderColor};border-radius:2px;display:flex;flex-direction:column;align-items:center;padding:1px 2px;box-shadow:0 1px 6px rgba(0,0,0,0.7);font-family:'Segoe UI','Microsoft YaHei',sans-serif;"><div style="font-size:9px;font-weight:700;color:#fff;letter-spacing:0.2px;text-shadow:0 1px 2px rgba(0,0,0,0.5);white-space:nowrap;line-height:1;">${this.icon}${this.name}</div><div style="width:100%;height:1px;background:rgba(255,255,255,0.2);margin:1px 0;"></div><div style="width:100%;height:2px;background:rgba(0,0,0,0.4);border-radius:1px;overflow:hidden;"><div style="width:${(this.hp/this.maxHp)*100}%;height:100%;background:${this.hp>this.maxHp*0.5?'#4caf50':this.hp>this.maxHp*0.25?'#ff9800':'#f44336'};transition:width 0.3s;"></div></div><div style="font-size:7px;color:rgba(255,255,255,0.7);margin-top:1px;line-height:1;">${Math.ceil(this.hp)} ${stateIcon}</div></div>`;
+        el.style.cursor = 'pointer';
+        el.addEventListener('click', (e) => { e.stopPropagation(); this.toggleSelect(); });
+        
+        this.marker = new maplibregl.Marker({ element: el, anchor: 'center' }).setLngLat([this.lng, this.lat]).addTo(map);
+        
+        const circleColor = `rgba(${teamColor},0.5)`;
+        const circleEl = document.createElement('div');
+        const rangePx = Math.min(500, this.range / 0.00002);
+        circleEl.style.cssText = `width:${rangePx}px;height:${rangePx}px;border:1px dashed ${circleColor};border-radius:50%;background:${circleColor.replace('0.5','0.02')};pointer-events:none;`;
+        this.rangeMarker = new maplibregl.Marker({ element: circleEl, anchor: 'center' }).setLngLat([this.lng, this.lat]).addTo(map);
+    }
+    
+    toggleSelect() { this.selected = !this.selected; this.updateMarker(); }
+    
+    updateMarker() {
+        if (!this.alive) return;
+        const teamColor = this.team === 'blue' ? '25,118,210' : '211,47,47';
+        const bgColor = `rgba(${teamColor},0.9)`;
+        const borderColor = this.selected ? '#ffd700' : 'rgba(255,255,255,0.4)';
+        const stateIcon = this.state === 'retreat' ? '🔙' : this.state === 'healing' ? '🔧' : '⚔️';
+        const el = this.marker.getElement();
+        el.innerHTML = `<div style="width:58px;background:${bgColor};border:${this.selected?2:1}px solid ${borderColor};border-radius:2px;display:flex;flex-direction:column;align-items:center;padding:1px 2px;box-shadow:0 1px 6px rgba(0,0,0,0.7);font-family:'Segoe UI','Microsoft YaHei',sans-serif;"><div style="font-size:9px;font-weight:700;color:#fff;letter-spacing:0.2px;text-shadow:0 1px 2px rgba(0,0,0,0.5);white-space:nowrap;line-height:1;">${this.icon}${this.name}</div><div style="width:100%;height:1px;background:rgba(255,255,255,0.2);margin:1px 0;"></div><div style="width:100%;height:2px;background:rgba(0,0,0,0.4);border-radius:1px;overflow:hidden;"><div style="width:${(this.hp/this.maxHp)*100}%;height:100%;background:${this.hp>this.maxHp*0.5?'#4caf50':this.hp>this.maxHp*0.25?'#ff9800':'#f44336'};transition:width 0.3s;"></div></div><div style="font-size:7px;color:rgba(255,255,255,0.7);margin-top:1px;line-height:1;">${Math.ceil(this.hp)} ${stateIcon}</div></div>`;
+    }
+    
+    findRetreatDirection() {
+        if (!this.target) return null;
+        const dx = this.lat - this.target.lat;
+        const dy = this.lng - this.target.lng;
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        if (dist === 0) return null;
+        return { lat: this.lat + (dx/dist)*this.retreatDistance, lng: this.lng + (dy/dist)*this.retreatDistance };
+    }
+    
+    snapToRoad(newLng, newLat) {
+        const road = findNearestRoad(newLng, newLat, 60);
+        if (road && road.distance < 40) {
+            return { lng: road.point.lng, lat: road.point.lat, onRoad: true };
+        }
+        return { lng: newLng, lat: newLat, onRoad: false };
+    }
+    
+    moveToRetreat() {
+        const retreatPoint = this.findRetreatDirection();
+        if (!retreatPoint) return;
+        const dx = retreatPoint.lat - this.lat;
+        const dy = retreatPoint.lng - this.lng;
+        const moveDist = Math.sqrt(dx*dx + dy*dy);
+        if (moveDist === 0) return;
+        const retreatSpeed = this.baseSpeed * 1.1;
+        let newLat = this.lat + (dx/moveDist)*retreatSpeed;
+        let newLng = this.lng + (dy/moveDist)*retreatSpeed;
+        const snapped = this.snapToRoad(newLng, newLat);
+        this.lng = snapped.lng; this.lat = snapped.lat; this.onRoad = snapped.onRoad;
+        this.updatePosition();
+    }
+    
+    moveToTarget() {
+        if (!this.target || !this.target.alive) { this.target = null; return; }
+        const dist = this.distanceTo(this.target);
+        if (dist <= this.range * 0.9) return;
+        const dx = this.target.lat - this.lat;
+        const dy = this.target.lng - this.lng;
+        const moveDist = Math.sqrt(dx*dx + dy*dy);
+        if (moveDist === 0) return;
+        let newLat = this.lat + (dx/moveDist)*this.baseSpeed;
+        let newLng = this.lng + (dy/moveDist)*this.baseSpeed;
+        const snapped = this.snapToRoad(newLng, newLat);
+        if (snapped.onRoad) {
+            this.lng = snapped.lng; this.lat = snapped.lat; this.onRoad = true;
+        } else {
+            this.onRoad = false;
+            const slowSpeed = this.baseSpeed * VEHICLE_OFFROAD_RATIO;
+            newLat = this.lat + (dx/moveDist)*slowSpeed;
+            newLng = this.lng + (dy/moveDist)*slowSpeed;
+            const snapped2 = this.snapToRoad(newLng, newLat);
+            this.lng = snapped2.lng; this.lat = snapped2.lat; this.onRoad = snapped2.onRoad;
+        }
+        this.updatePosition();
+    }
+    
+    attackTarget() {
+        if (!this.target || !this.target.alive) return;
+        if (this.cooldown > 0) { this.cooldown--; return; }
+        const dist = this.distanceTo(this.target);
+        if (dist <= this.range) {
+            let damage;
+            let isAAAttack = false;
+            
+            if (this.vehicleType === 'aa') {
+                // 防空车：对空高伤害，对地极低伤害
+                if (this.target.type === 'heli' || this.target.type === 'jet') {
+                    damage = this.attackAir + Math.random() * 12;
+                    isAAAttack = true;
+                    addLog(`${this.team==='blue'?'🔵':'🔴'}🎯${this.name} 对空射击 ${this.target.name}！`, 'aa');
+                } else {
+                    damage = this.attackGround + Math.random() * 2;
+                }
+            } else {
+                damage = this.attack + Math.random() * 8;
+                if (this.vehicleType === 'tank' && this.target.type !== 'infantry' && this.target.type !== 'heli' && this.target.type !== 'jet') {
+                    damage *= 1.3;
+                }
+            }
+            
+            const isHeavy = ['tank','spg','mlrs'].includes(this.vehicleType);
+            createBullet([this.lng, this.lat], [this.target.lng, this.target.lat], this.team, false, isHeavy || isAAAttack);
+            
+            if (this.vehicleType === 'mlrs') {
+                this.target.takeDamage(damage, this);
+                for (let u of units) {
+                    if (u.team !== this.team && u.alive && u.id !== this.target.id) {
+                        const splashDist = Math.sqrt((u.lat - this.target.lat)**2 + (u.lng - this.target.lng)**2);
+                        if (splashDist < 0.003) {
+                            u.takeDamage(damage * 0.4, this);
+                        }
+                    }
+                }
+                addLog(`${this.team==='blue'?'🔵':'🔴'}🚀${this.name} 火箭弹覆盖打击！`, 'vehicle');
+            } else {
+                this.target.takeDamage(damage, this);
+            }
+            
+            this.cooldown = this.maxCooldown;
+            if (isAAAttack) playAASound();
+            else if (this.vehicleType === 'mlrs') playRocketSound();
+            else if (isHeavy) playCannonSound();
+            else playGunshotSound(this.team);
+            
+            this.marker.getElement().classList.add('attacking');
+            setTimeout(() => { this.marker.getElement().classList.remove('attacking'); }, 200);
+        }
+    }
+    
+    // 防空车优先找空中目标
+    findTarget() {
+        if (this.vehicleType === 'aa') {
+            // 优先攻击空中目标
+            let airTarget = null, airDist = Infinity;
+            let groundTarget = null, groundDist = Infinity;
+            for (let u of units) {
+                if (u.team !== this.team && u.alive) {
+                    const dist = this.distanceTo(u);
+                    if (u.type === 'heli' || u.type === 'jet') {
+                        if (dist < airDist) { airDist = dist; airTarget = u; }
+                    } else {
+                        if (dist < groundDist) { groundDist = dist; groundTarget = u; }
+                    }
+                }
+            }
+            // 如果空中目标在射程内，优先打空中
+            if (airTarget && airDist <= this.range) {
+                this.target = airTarget;
+                return airTarget;
+            }
+            this.target = groundTarget;
+            return groundTarget;
+        }
+        return super.findTarget();
+    }
+    
+    heal() {
+        if (this.hp >= this.maxHp) {
+            this.hp = this.maxHp;
+            if (this.state === 'healing') { 
+                this.state = 'combat'; 
+                addLog(`${this.team==='blue'?'🔵':'🔴'}${this.icon}${this.name} 维修完成，重返战场！`, 'heal'); 
+            }
+            return;
+        }
+        this.hp = Math.min(this.maxHp, this.hp + this.healRate);
+        this.updateMarker();
+    }
+    
+    update() {
+        if (!this.alive) return;
+        this.findTarget();
+        if (this.state === 'retreat') {
+            if (!this.target) { this.state = 'healing'; return; }
+            const distToEnemy = this.distanceTo(this.target);
+            if (distToEnemy < this.retreatDistance) this.moveToRetreat();
+            else { 
+                this.state = 'healing'; 
+                addLog(`${this.team==='blue'?'🔵':'🔴'}${this.icon}${this.name} 到达安全位置，开始维修！`, 'heal'); 
+            }
+        }
+        else if (this.state === 'healing') {
+            this.heal();
+            if (this.target && this.distanceTo(this.target) < this.range * 0.5) {
+                if (this.hp / this.maxHp <= this.retreatThreshold) { 
+                    this.state = 'retreat'; 
+                    addLog(`${this.team==='blue'?'🔵':'🔴'}${this.icon}${this.name} 敌人逼近，继续撤退！`, 'retreat'); 
+                }
+                else { 
+                    this.state = 'combat'; 
+                    addLog(`${this.team==='blue'?'🔵':'🔴'}${this.icon}${this.name} 维修中，投入战斗！`, 'heal'); 
+                }
+            }
+            if (this.hp / this.maxHp >= this.healThreshold) { 
+                this.state = 'combat'; 
+                addLog(`${this.team==='blue'?'🔵':'🔴'}${this.icon}${this.name} 维修完成，重返战场！`, 'heal'); 
+            }
+        }
+        else {
+            if (this.hp / this.maxHp <= this.retreatThreshold) { 
+                this.state = 'retreat'; 
+                addLog(`${this.team==='blue'?'🔵':'🔴'}${this.icon}${this.name} 受损严重，开始撤退！`, 'retreat'); 
+                return; 
+            }
+            if (this.target) { this.moveToTarget(); this.attackTarget(); }
+        }
+    }
+}
+
+// ==================== 武装直升机 ====================
+class Helicopter extends Unit {
+    constructor(lngLat, team) {
+        super(lngLat, team, 'heli');
+        this.attack = 35 + Math.random() * 15;
+        this.defense = 8;
+        this.baseSpeed = speedToDegPerTick(HELI_SPEED_MPS);
+        this.range = 0.009;
+        this.hoverRadius = 0.001;
+        this.hoverAngle = Math.random() * Math.PI * 2;
+        this.hoverCenter = { lat: this.lat, lng: this.lng };
+        this.createMarker();
+    }
+    
+    createMarker() {
+        const bgColor = this.team === 'blue' ? 'rgba(123,31,162,0.9)' : 'rgba(106,27,154,0.9)';
+        const borderColor = this.selected ? '#ffd700' : 'rgba(255,255,255,0.5)';
+        
+        const el = document.createElement('div');
+        el.className = 'soldier-marker-el';
+        el.innerHTML = `<div style="width:60px;background:${bgColor};border:${this.selected?2:1}px solid ${borderColor};border-radius:3px;display:flex;flex-direction:column;align-items:center;padding:2px 3px;box-shadow:0 2px 10px rgba(0,0,0,0.7);font-family:'Segoe UI','Microsoft YaHei',sans-serif;"><div style="font-size:10px;font-weight:700;color:#fff;letter-spacing:0.3px;text-shadow:0 1px 2px rgba(0,0,0,0.5);white-space:nowrap;line-height:1;">🚁${this.name}</div><div style="width:100%;height:1px;background:rgba(255,255,255,0.3);margin:2px 0;"></div><div style="width:100%;height:3px;background:rgba(0,0,0,0.4);border-radius:2px;overflow:hidden;"><div style="width:${(this.hp/this.maxHp)*100}%;height:100%;background:${this.hp>150?'#4caf50':this.hp>75?'#ff9800':'#f44336'};transition:width 0.3s;"></div></div><div style="font-size:8px;color:rgba(255,255,255,0.8);margin-top:1px;line-height:1;">${Math.ceil(this.hp)} 悬停</div></div>`;
+        el.style.cursor = 'pointer';
+        el.addEventListener('click', (e) => { e.stopPropagation(); this.toggleSelect(); });
+        
+        this.marker = new maplibregl.Marker({ element: el, anchor: 'center' }).setLngLat([this.lng, this.lat]).addTo(map);
+        
+        const circleColor = this.team === 'blue' ? 'rgba(123,31,162,0.4)' : 'rgba(106,27,154,0.4)';
+        const circleEl = document.createElement('div');
+        circleEl.style.cssText = `width:400px;height:400px;border:1px dashed ${circleColor};border-radius:50%;background:${circleColor.replace('0.4','0.02')};pointer-events:none;`;
+        this.rangeMarker = new maplibregl.Marker({ element: circleEl, anchor: 'center' }).setLngLat([this.lng, this.lat]).addTo(map);
+    }
+    
+    toggleSelect() { this.selected = !this.selected; this.updateMarker(); }
+    
+    updateMarker() {
+        if (!this.alive) return;
+        const bgColor = this.team === 'blue' ? 'rgba(123,31,162,0.9)' : 'rgba(106,27,154,0.9)';
+        const borderColor = this.selected ? '#ffd700' : 'rgba(255,255,255,0.5)';
+        const el = this.marker.getElement();
+        el.innerHTML = `<div style="width:60px;background:${bgColor};border:${this.selected?2:1}px solid ${borderColor};border-radius:3px;display:flex;flex-direction:column;align-items:center;padding:2px 3px;box-shadow:0 2px 10px rgba(0,0,0,0.7);font-family:'Segoe UI','Microsoft YaHei',sans-serif;"><div style="font-size:10px;font-weight:700;color:#fff;letter-spacing:0.3px;text-shadow:0 1px 2px rgba(0,0,0,0.5);white-space:nowrap;line-height:1;">🚁${this.name}</div><div style="width:100%;height:1px;background:rgba(255,255,255,0.3);margin:2px 0;"></div><div style="width:100%;height:3px;background:rgba(0,0,0,0.4);border-radius:2px;overflow:hidden;"><div style="width:${(this.hp/this.maxHp)*100}%;height:100%;background:${this.hp>150?'#4caf50':this.hp>75?'#ff9800':'#f44336'};transition:width 0.3s;"></div></div><div style="font-size:8px;color:rgba(255,255,255,0.8);margin-top:1px;line-height:1;">${Math.ceil(this.hp)} 悬停</div></div>`;
+    }
+    
+    hoverPatrol() {
+        this.hoverAngle += 0.05;
+        const newLat = this.hoverCenter.lat + Math.sin(this.hoverAngle) * this.hoverRadius;
+        const newLng = this.hoverCenter.lng + Math.cos(this.hoverAngle) * this.hoverRadius;
+        this.lat = newLat; this.lng = newLng; this.updatePosition();
+    }
+    
+    moveToTarget() {
+        if (!this.target || !this.target.alive) { this.target = null; return; }
+        const dist = this.distanceTo(this.target);
+        if (dist > this.range * 0.3) {
+            const dx = this.target.lat - this.lat;
+            const dy = this.target.lng - this.lng;
+            const moveDist = Math.sqrt(dx*dx + dy*dy);
+            if (moveDist === 0) return;
+            this.lat += (dx/moveDist) * this.baseSpeed;
+            this.lng += (dy/moveDist) * this.baseSpeed;
+            this.hoverCenter = { lat: this.lat, lng: this.lng };
+            this.updatePosition();
+        } else {
+            this.hoverPatrol();
+        }
+    }
+    
+    attackTarget() {
+        if (!this.target || !this.target.alive) return;
+        if (this.cooldown > 0) { this.cooldown--; return; }
+        const dist = this.distanceTo(this.target);
+        if (dist <= this.range) {
+            let damage = this.attack + Math.random() * 10;
+            if (this.target.type === 'infantry') damage *= 1.5;
+            else if (this.target.type === 'jet') damage *= 0.6;
+            
+            createBullet([this.lng, this.lat], [this.target.lng, this.target.lat], this.team, true);
+            this.target.takeDamage(damage, this);
+            this.cooldown = 4;
+            playHeliSound();
+            this.marker.getElement().classList.add('attacking');
+            setTimeout(() => { this.marker.getElement().classList.remove('attacking'); }, 200);
+        }
+    }
+    
+    update() {
+        if (!this.alive) return;
+        this.findTarget();
+        if (this.target) {
+            this.moveToTarget();
+            this.attackTarget();
+        } else {
+            this.hoverPatrol();
+        }
+    }
+}
+
+// ==================== 战斗机 ====================
+class Jet extends Unit {
+    constructor(lngLat, team) {
+        super(lngLat, team, 'jet');
+        this.attack = 50 + Math.random() * 20;
+        this.defense = 12;
+        this.baseSpeed = speedToDegPerTick(JET_SPEED_MPS);
+        this.range = 0.0135;
+        this.angle = Math.random() * Math.PI * 2;
+        this.orbitCenter = { lat: this.lat, lng: this.lng };
+        this.orbitRadius = 0.005;
+        this.orbitAngle = Math.random() * Math.PI * 2;
+        this.createMarker();
+    }
+    
+    createMarker() {
+        const bgColor = this.team === 'blue' ? 'rgba(0,131,143,0.9)' : 'rgba(0,96,100,0.9)';
+        const borderColor = this.selected ? '#ffd700' : 'rgba(255,255,255,0.5)';
+        
+        const el = document.createElement('div');
+        el.className = 'soldier-marker-el';
+        el.innerHTML = `<div style="width:60px;background:${bgColor};border:${this.selected?2:1}px solid ${borderColor};border-radius:3px;display:flex;flex-direction:column;align-items:center;padding:2px 3px;box-shadow:0 2px 10px rgba(0,0,0,0.7);font-family:'Segoe UI','Microsoft YaHei',sans-serif;"><div style="font-size:10px;font-weight:700;color:#fff;letter-spacing:0.3px;text-shadow:0 1px 2px rgba(0,0,0,0.5);white-space:nowrap;line-height:1;">✈️${this.name}</div><div style="width:100%;height:1px;background:rgba(255,255,255,0.3);margin:2px 0;"></div><div style="width:100%;height:3px;background:rgba(0,0,0,0.4);border-radius:2px;overflow:hidden;"><div style="width:${(this.hp/this.maxHp)*100}%;height:100%;background:${this.hp>300?'#4caf50':this.hp>150?'#ff9800':'#f44336'};transition:width 0.3s;"></div></div><div style="font-size:8px;color:rgba(255,255,255,0.8);margin-top:1px;line-height:1;">${Math.ceil(this.hp)} 巡航</div></div>`;
+        el.style.cursor = 'pointer';
+        el.addEventListener('click', (e) => { e.stopPropagation(); this.toggleSelect(); });
+        
+        this.marker = new maplibregl.Marker({ element: el, anchor: 'center' }).setLngLat([this.lng, this.lat]).addTo(map);
+        
+        const circleColor = this.team === 'blue' ? 'rgba(0,131,143,0.4)' : 'rgba(0,96,100,0.4)';
+        const circleEl = document.createElement('div');
+        circleEl.style.cssText = `width:600px;height:600px;border:1px dashed ${circleColor};border-radius:50%;background:${circleColor.replace('0.4','0.02')};pointer-events:none;`;
+        this.rangeMarker = new maplibregl.Marker({ element: circleEl, anchor: 'center' }).setLngLat([this.lng, this.lat]).addTo(map);
+    }
+    
+    toggleSelect() { this.selected = !this.selected; this.updateMarker(); }
+    
+    updateMarker() {
+        if (!this.alive) return;
+        const bgColor = this.team === 'blue' ? 'rgba(0,131,143,0.9)' : 'rgba(0,96,100,0.9)';
+        const borderColor = this.selected ? '#ffd700' : 'rgba(255,255,255,0.5)';
+        const el = this.marker.getElement();
+        el.innerHTML = `<div style="width:60px;background:${bgColor};border:${this.selected?2:1}px solid ${borderColor};border-radius:3px;display:flex;flex-direction:column;align-items:center;padding:2px 3px;box-shadow:0 2px 10px rgba(0,0,0,0.7);font-family:'Segoe UI','Microsoft YaHei',sans-serif;"><div style="font-size:10px;font-weight:700;color:#fff;letter-spacing:0.3px;text-shadow:0 1px 2px rgba(0,0,0,0.5);white-space:nowrap;line-height:1;">✈️${this.name}</div><div style="width:100%;height:1px;background:rgba(255,255,255,0.3);margin:2px 0;"></div><div style="width:100%;height:3px;background:rgba(0,0,0,0.4);border-radius:2px;overflow:hidden;"><div style="width:${(this.hp/this.maxHp)*100}%;height:100%;background:${this.hp>300?'#4caf50':this.hp>150?'#ff9800':'#f44336'};transition:width 0.3s;"></div></div><div style="font-size:8px;color:rgba(255,255,255,0.8);margin-top:1px;line-height:1;">${Math.ceil(this.hp)} 巡航</div></div>`;
+    }
+    
+    orbit() {
+        this.orbitAngle += 0.03;
+        const newLat = this.orbitCenter.lat + Math.sin(this.orbitAngle) * this.orbitRadius;
+        const newLng = this.orbitCenter.lng + Math.cos(this.orbitAngle) * this.orbitRadius;
+        this.lat = newLat; this.lng = newLng; this.updatePosition();
+    }
+    
+    moveToTarget() {
+        if (!this.target || !this.target.alive) { this.target = null; return; }
+        const dist = this.distanceTo(this.target);
+        if (dist > this.range * 0.5) {
+            const dx = this.target.lat - this.orbitCenter.lat;
+            const dy = this.target.lng - this.orbitCenter.lng;
+            this.orbitCenter.lat += dx * 0.02;
+            this.orbitCenter.lng += dy * 0.02;
+        } else {
+            this.orbitCenter = { lat: this.target.lat, lng: this.target.lng };
+        }
+        this.orbit();
+    }
+    
+    attackTarget() {
+        if (!this.target || !this.target.alive) return;
+        if (this.cooldown > 0) { this.cooldown--; return; }
+        const dist = this.distanceTo(this.target);
+        if (dist <= this.range) {
+            let damage = this.attack + Math.random() * 15;
+            if (this.target.type === 'jet') damage *= 1.2;
+            else if (this.target.type === 'heli') damage *= 1.3;
+            
+            createBullet([this.lng, this.lat], [this.target.lng, this.target.lat], this.team, true);
+            this.target.takeDamage(damage, this);
+            this.cooldown = 5;
+            playJetSound();
+            this.marker.getElement().classList.add('attacking');
+            setTimeout(() => { this.marker.getElement().classList.remove('attacking'); }, 200);
+        }
+    }
+    
+    update() {
+        if (!this.alive) return;
+        this.findTarget();
+        if (this.target) {
+            this.moveToTarget();
+            this.attackTarget();
+        } else {
+            this.orbit();
+        }
+    }
+}
+
+// ==================== 工厂函数 ====================
+function spawnUnit(lngLat, mode) {
+    let unit;
+    if (mode === 'blue' || mode === 'red') {
+        if (currentGroundType === 'infantry') {
+            unit = new Infantry(lngLat, mode);
+        } else {
+            unit = new Vehicle(lngLat, mode, currentGroundType);
+        }
+    } else if (mode === 'heli') {
+        unit = new Helicopter(lngLat, 'blue');
+    } else if (mode === 'heli_red') {
+        unit = new Helicopter(lngLat, 'red');
+    } else if (mode === 'jet') {
+        unit = new Jet(lngLat, 'blue');
+    } else if (mode === 'jet_red') {
+        unit = new Jet(lngLat, 'red');
+    }
+    if (!unit) return;
+    units.push(unit);
+    
+    const typeName = vehicleDisplayNames[unit.type] || (unit.type === 'infantry' ? '步兵' : unit.type === 'heli' ? '武直' : '战机');
+    addLog(`${unit.team==='blue'?'🔵':'🔴'}${typeName} ${unit.name} 已部署`, 'spawn');
+    updateStats();
+    updateUnitList();
+    
+    const popup = new maplibregl.Popup({ closeButton: false, closeOnClick: false })
+        .setLngLat([unit.lng, unit.lat])
+        .setHTML(`<<div style="font-size:11px;color:${unit.team==='blue'?'#4fc3f7':'#ff5252'};font-weight:bold;">+1 ${unit.name}</div>`)
+        .addTo(map);
+    setTimeout(() => popup.remove(), 600);
+}
+
+function setGroundType(type) {
+    currentGroundType = type;
+    updateModeIndicator();
+}
+
+function setMode(mode) {
+    currentMode = mode;
+    updateModeIndicator();
+}
+
+function updateModeIndicator() {
+    const indicator = document.getElementById('modeIndicator');
+    const teamLabel = currentMode === 'blue' ? '蓝军' : currentMode === 'red' ? '红军' : '';
+    const typeLabels = {
+        'infantry': '🪖 步兵',
+        'tank': '🛡️ 坦克',
+        'ifv': '🚙 步战车',
+        'spg': '🔥 自行火炮',
+        'mlrs': '🚀 火箭炮',
+        'apc': '🚛 装甲车',
+        'aa': '🎯 防空车'
+    };
+    
+    if (currentMode === 'blue' || currentMode === 'red') {
+        indicator.textContent = `🖱️ 点击放置${teamLabel}${typeLabels[currentGroundType] || ''}`;
+    } else {
+        const labels = {
+            'heli': '🖱️ 点击放置蓝军武直',
+            'heli_red': '🖱️ 点击放置红军武直',
+            'jet': '🖱️ 点击放置蓝军战机',
+            'jet_red': '🖱️ 点击放置红军战机'
+        };
+        indicator.textContent = labels[currentMode] || '🖱️ 点击放置单位';
+    }
+    indicator.className = 'mode-indicator active';
+}
+
+function startBattle() {
+    if (battleActive) return;
+    const blueUnits = units.filter(u => u.team === 'blue' && u.alive);
+    const redUnits = units.filter(u => u.team === 'red' && u.alive);
+    if (blueUnits.length === 0 || redUnits.length === 0) {
+        updateHint('双方都需要至少一个单位！'); return;
+    }
+    battleActive = true;
+    document.getElementById('battleStatus').textContent = '🔥 战斗中';
+    document.getElementById('battleStatus').style.color = '#ff9800';
+    updateHint('空地一体战开始！');
+    addLog('⚔️ 空地一体战开始！', 'shoot');
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    battleInterval = setInterval(() => {
+        for (let u of units) { if (u.alive) u.update(); }
+        const aliveBlue = units.filter(u => u.team === 'blue' && u.alive).length;
+        const aliveRed = units.filter(u => u.team === 'red' && u.alive).length;
+        if (aliveBlue === 0 || aliveRed === 0) { endBattle(aliveBlue > 0 ? 'blue' : 'red'); }
+        updateStats();
+        updateUnitList();
+    }, TICK_INTERVAL);
+}
+
+function endBattle(winner) {
+    clearInterval(battleInterval);
+    battleActive = false;
+    const winnerText = winner === 'blue' ? '🔵 蓝军胜利！' : '🔴 红军胜利！';
+    document.getElementById('battleStatus').textContent = winnerText;
+    document.getElementById('battleStatus').style.color = winner === 'blue' ? '#4fc3f7' : '#ff5252';
+    updateHint(`${winnerText} 点击"重置"开始新战斗`);
+    addLog(`🏆 ${winnerText}`, 'spawn');
+}
+
+function resetBattle() {
+    clearInterval(battleInterval);
+    battleActive = false;
+    for (let u of units) {
+        if (u.marker) u.marker.remove();
+        if (u.rangeMarker) u.rangeMarker.remove();
+    }
+    units = [];
+    unitIdCounter = 0;
+    blueDead = 0;
+    redDead = 0;
+    document.getElementById('battleStatus').textContent = '准备中';
+    document.getElementById('battleStatus').style.color = '#fff';
+    document.getElementById('battleLog').innerHTML = '';
+    updateStats();
+    updateUnitList();
+    updateHint('战场已清空');
+}
+
+function updateStats() {
+    const countByType = (team, type) => units.filter(u => u.team === team && u.type === type && u.alive).length;
+    
+    document.getElementById('blueCount').textContent = countByType('blue', 'infantry');
+    document.getElementById('redCount').textContent = countByType('red', 'infantry');
+    document.getElementById('blueTankCount').textContent = countByType('blue', 'tank');
+    document.getElementById('redTankCount').textContent = countByType('red', 'tank');
+    document.getElementById('blueIfvCount').textContent = countByType('blue', 'ifv');
+    document.getElementById('redIfvCount').textContent = countByType('red', 'ifv');
+    document.getElementById('blueSpgCount').textContent = countByType('blue', 'spg');
+    document.getElementById('redSpgCount').textContent = countByType('red', 'spg');
+    document.getElementById('blueMlrsCount').textContent = countByType('blue', 'mlrs');
+    document.getElementById('redMlrsCount').textContent = countByType('red', 'mlrs');
+    document.getElementById('blueApcCount').textContent = countByType('blue', 'apc');
+    document.getElementById('redApcCount').textContent = countByType('red', 'apc');
+    document.getElementById('blueAaCount').textContent = countByType('blue', 'aa');
+    document.getElementById('redAaCount').textContent = countByType('red', 'aa');
+    document.getElementById('blueHeliCount').textContent = countByType('blue', 'heli');
+    document.getElementById('redHeliCount').textContent = countByType('red', 'heli');
+    document.getElementById('blueJetCount').textContent = countByType('blue', 'jet');
+    document.getElementById('redJetCount').textContent = countByType('red', 'jet');
+}
+
+function updateUnitList() {
+    const blueList = document.getElementById('blueList');
+    const redList = document.getElementById('redList');
+    blueList.innerHTML = '';
+    redList.innerHTML = '';
+    for (let u of units) {
+        if (!u.alive) continue;
+        const typeIcon = u.type === 'infantry' ? '🪖' : 
+                         u.type === 'tank' ? '🛡️' : 
+                         u.type === 'ifv' ? '🚙' : 
+                         u.type === 'spg' ? '🔥' : 
+                         u.type === 'mlrs' ? '🚀' : 
+                         u.type === 'apc' ? '🚛' : 
+                         u.type === 'aa' ? '🎯' :
+                         u.type === 'heli' ? '🚁' : '✈️';
+        const stateLabel = u.type === 'infantry' ? (u.state==='retreat'?'🔙':u.state==='healing'?'💚':'⚔️') : 
+                           ['tank','ifv','spg','mlrs','apc','aa'].includes(u.type) ? (u.state==='retreat'?'🔙':u.state==='healing'?'🔧':'⚔️') :
+                           u.type==='heli'?'悬停':'巡航';
+        const iconClass = u.type === 'infantry' || ['tank','ifv','spg','mlrs','apc'].includes(u.type) ? 
+                          (u.team==='blue'?'blue':'red') : u.type==='aa'?'aa':u.type==='heli'?'heli':'jet';
+        const item = document.createElement('div');
+        item.className = 'soldier-item';
+        item.innerHTML = `<div class="soldier-icon ${iconClass}">${typeIcon}</div><div style="flex:1"><div style="font-weight:600">${u.name} ${stateLabel}</div><div style="font-size:10px;color:#888">HP: ${Math.ceil(u.hp)}/${u.maxHp}</div></div><div class="hp-bar"><div class="hp-bar-fill" style="width:${(u.hp/u.maxHp)*100}%;background:${u.hp/u.maxHp>0.5?'#4caf50':u.hp/u.maxHp>0.25?'#ff9800':'#f44336'}"></div></div>`;
+        item.onclick = () => { map.setCenter([u.lng, u.lat]); map.setZoom(18); u.toggleSelect(); };
+        if (u.team === 'blue') blueList.appendChild(item);
+        else redList.appendChild(item);
+    }
+    if (blueList.innerHTML === '') blueList.innerHTML = '<div style="color:#666;font-size:11px;padding:6px;">暂无蓝军单位</div>';
+    if (redList.innerHTML === '') redList.innerHTML = '<div style="color:#666;font-size:11px;padding:6px;">暂无红军单位</div>';
+}
+
+function addLog(message, type = '') {
+    const log = document.getElementById('battleLog');
+    const entry = document.createElement('div');
+    entry.className = `log-entry ${type}`;
+    entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+    log.insertBefore(entry, log.firstChild);
+    while (log.children.length > 50) { log.removeChild(log.lastChild); }
+}
+
+function updateHint(text) {
+    const hint = document.getElementById('bottomHint');
+    hint.textContent = text;
+    hint.style.opacity = '1';
+    setTimeout(() => { hint.style.opacity = '0.7'; }, 2000);
+}
+
+function togglePanel() {
+    const panel = document.getElementById('sidePanel');
+    const toggle = document.getElementById('panelToggle');
+    panel.classList.toggle('collapsed');
+    toggle.classList.toggle('collapsed');
+    toggle.textContent = panel.classList.contains('collapsed') ? '▶' : '◀';
+}
+
+window.onload = function() { initMap(); };
+</script>
+</body>
+</html>
