@@ -1,0 +1,1743 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <title>粒子宇宙 - 触屏版</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: none;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        body {
+            background: #000;
+            color: #e0e0e0;
+            font-family: -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+            position: fixed;
+        }
+
+        #canvas-container {
+            position: fixed;
+            inset: 0;
+            z-index: 1;
+        }
+
+        canvas {
+            display: block;
+            background: radial-gradient(ellipse at center, #0a0a1a 0%, #000000 70%);
+        }
+
+        /* 顶部 HUD */
+        #top-hud {
+            position: fixed;
+            top: 8px;
+            left: 8px;
+            right: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            z-index: 50;
+            pointer-events: none;
+        }
+
+        .hud-block {
+            background: rgba(0,0,0,0.6);
+            backdrop-filter: blur(10px);
+            padding: 6px 10px;
+            border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.08);
+            font-family: monospace;
+            font-size: 11px;
+        }
+
+        .hud-block .label {
+            color: #666;
+            font-size: 9px;
+        }
+
+        .hud-block .value {
+            color: #00ff88;
+            font-size: 13px;
+        }
+
+        .hud-block .value.info {
+            color: #00d4ff;
+        }
+
+        .hud-block .value.warning {
+            color: #ffaa00;
+        }
+
+        /* 底部控制栏 */
+        #bottom-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 56px;
+            background: rgba(5, 5, 10, 0.9);
+            backdrop-filter: blur(20px);
+            border-top: 1px solid rgba(255,255,255,0.08);
+            display: flex;
+            align-items: center;
+            justify-content: space-around;
+            z-index: 100;
+            padding: 0 8px;
+        }
+
+        .bar-btn {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 2px;
+            padding: 4px 12px;
+            background: transparent;
+            border: none;
+            color: #888;
+            font-size: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+            min-width: 48px;
+            position: relative;
+        }
+
+        .bar-btn svg {
+            width: 24px;
+            height: 24px;
+            fill: currentColor;
+        }
+
+        .bar-btn:active {
+            color: #00d4ff;
+            transform: scale(0.95);
+        }
+
+        .bar-btn.active {
+            color: #00d4ff;
+        }
+
+        /* 弹出面板 */
+        .slide-panel {
+            position: fixed;
+            bottom: 56px;
+            left: 0;
+            right: 0;
+            background: rgba(5, 5, 10, 0.95);
+            backdrop-filter: blur(20px);
+            border-top: 1px solid rgba(255,255,255,0.1);
+            padding: 12px;
+            z-index: 90;
+            transform: translateY(100%);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            max-height: 45vh;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .slide-panel.open {
+            transform: translateY(0);
+        }
+
+        .panel-title {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        /* 可滑动粒子列表容器 */
+        .scroll-container {
+            position: relative;
+            overflow: hidden;
+            margin-bottom: 8px;
+        }
+
+        .scroll-container::after {
+            content: '';
+            position: absolute;
+            right: 0;
+            top: 0;
+            bottom: 0;
+            width: 30px;
+            background: linear-gradient(to right, transparent, rgba(5,5,10,0.8));
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .scroll-container.can-scroll::after {
+            opacity: 1;
+        }
+
+        .particle-row {
+            display: flex;
+            gap: 8px;
+            padding-bottom: 4px;
+            cursor: grab;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .particle-row:active {
+            cursor: grabbing;
+        }
+
+        .particle-chip {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 10px 14px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 20px;
+            color: #ccc;
+            font-size: 12px;
+            white-space: nowrap;
+            cursor: pointer;
+            transition: all 0.2s;
+            flex-shrink: 0;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .particle-chip::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: rgba(255,255,255,0);
+            transition: background 0.2s;
+        }
+
+        .particle-chip:active {
+            transform: scale(0.95);
+            background: rgba(255,255,255,0.1);
+        }
+
+        .particle-chip:active::before {
+            background: rgba(255,255,255,0.1);
+        }
+
+        .particle-chip .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            box-shadow: 0 0 6px currentColor;
+            flex-shrink: 0;
+            position: relative;
+            z-index: 1;
+        }
+
+        .particle-chip .count {
+            font-size: 10px;
+            color: #666;
+            margin-left: 4px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .particle-chip .name {
+            position: relative;
+            z-index: 1;
+        }
+
+        /* 滑动指示器 */
+        .scroll-indicator {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            margin-top: 4px;
+            height: 16px;
+        }
+
+        .scroll-dot {
+            width: 4px;
+            height: 4px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.2);
+            transition: all 0.3s;
+        }
+
+        .scroll-dot.active {
+            width: 12px;
+            border-radius: 2px;
+            background: #00d4ff;
+        }
+
+        /* 滑动箭头提示 */
+        .swipe-hint {
+            position: absolute;
+            right: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: rgba(255,255,255,0.3);
+            font-size: 20px;
+            animation: swipeHint 2s infinite;
+            pointer-events: none;
+            z-index: 2;
+        }
+
+        @keyframes swipeHint {
+            0%, 100% { opacity: 0.3; transform: translateY(-50%) translateX(0); }
+            50% { opacity: 0.8; transform: translateY(-50%) translateX(-5px); }
+        }
+
+        .preset-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+        }
+
+        .preset-btn {
+            padding: 12px;
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.06);
+            border-radius: 8px;
+            color: #aaa;
+            font-size: 12px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .preset-btn:active {
+            background: rgba(0, 212, 255, 0.1);
+            border-color: rgba(0, 212, 255, 0.3);
+            color: #fff;
+            transform: scale(0.95);
+        }
+
+        .param-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 14px;
+        }
+
+        .param-name {
+            font-size: 12px;
+            color: #888;
+            min-width: 70px;
+            flex-shrink: 0;
+        }
+
+        .param-slider {
+            flex: 1;
+            -webkit-appearance: none;
+            height: 6px;
+            border-radius: 3px;
+            background: #1a1a2e;
+            outline: none;
+        }
+
+        .param-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            background: #00d4ff;
+            box-shadow: 0 0 12px rgba(0, 212, 255, 0.5);
+            cursor: pointer;
+        }
+
+        .param-value {
+            font-family: monospace;
+            font-size: 12px;
+            color: #00d4ff;
+            min-width: 50px;
+            text-align: right;
+            flex-shrink: 0;
+        }
+
+        .force-toggles {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 14px;
+        }
+
+        .force-chip {
+            flex: 1;
+            padding: 10px;
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 8px;
+            color: #666;
+            font-size: 11px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+        }
+
+        .force-chip:active {
+            transform: scale(0.95);
+        }
+
+        .force-chip.active {
+            background: rgba(0, 212, 255, 0.1);
+            border-color: #00d4ff;
+            color: #fff;
+        }
+
+        .force-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+
+        /* 遮罩 */
+        .panel-mask {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.3);
+            z-index: 80;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+        }
+
+        .panel-mask.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        /* 引导层 */
+        #hint-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.8);
+            backdrop-filter: blur(10px);
+            z-index: 200;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            gap: 20px;
+            transition: opacity 0.5s;
+        }
+
+        #hint-overlay.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .hint-content {
+            text-align: center;
+            padding: 0 30px;
+        }
+
+        .hint-content h2 {
+            color: #00d4ff;
+            font-size: 24px;
+            margin-bottom: 24px;
+        }
+
+        .hint-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 14px;
+            color: #aaa;
+            font-size: 14px;
+        }
+
+        .hint-icon {
+            width: 40px;
+            height: 40px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            flex-shrink: 0;
+        }
+
+        .hint-start {
+            margin-top: 30px;
+            padding: 14px 50px;
+            background: linear-gradient(135deg, #00d4ff, #0066ff);
+            border: none;
+            border-radius: 25px;
+            color: #fff;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 0 30px rgba(0, 212, 255, 0.3);
+        }
+
+        .hint-start:active {
+            transform: scale(0.95);
+        }
+
+        /* 滚动条隐藏 */
+        ::-webkit-scrollbar {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="canvas-container">
+        <canvas id="universe"></canvas>
+    </div>
+
+    <!-- 顶部 HUD -->
+    <div id="top-hud">
+        <div class="hud-block">
+            <div class="label">FPS</div>
+            <div class="value" id="hud-fps">60</div>
+        </div>
+        <div class="hud-block">
+            <div class="label">粒子</div>
+            <div class="value info" id="hud-particles">0</div>
+        </div>
+        <div class="hud-block">
+            <div class="label">能量</div>
+            <div class="value warning" id="hud-energy">0</div>
+        </div>
+        <div class="hud-block">
+            <div class="label">时间</div>
+            <div class="value" id="hud-time">0.0s</div>
+        </div>
+    </div>
+
+    <!-- 遮罩 -->
+    <div class="panel-mask" id="mask" onclick="closeAllPanels()"></div>
+
+    <!-- 粒子面板 -->
+    <div class="slide-panel" id="particle-panel">
+        <div class="panel-title">添加粒子 ← 左右滑动选择</div>
+        
+        <div class="scroll-container" id="scroll-container-1">
+            <div class="particle-row" id="particle-row-1">
+                <div class="particle-chip" data-type="electron" data-count="5">
+                    <span class="dot" style="background:#00ffff;"></span>
+                    <span class="name">电子</span>
+                    <span class="count">x5</span>
+                </div>
+                <div class="particle-chip" data-type="proton" data-count="3">
+                    <span class="dot" style="background:#ff4444;"></span>
+                    <span class="name">质子</span>
+                    <span class="count">x3</span>
+                </div>
+                <div class="particle-chip" data-type="neutron" data-count="3">
+                    <span class="dot" style="background:#aaaaaa;"></span>
+                    <span class="name">中子</span>
+                    <span class="count">x3</span>
+                </div>
+                <div class="particle-chip" data-type="photon" data-count="8">
+                    <span class="dot" style="background:#ffff00;"></span>
+                    <span class="name">光子</span>
+                    <span class="count">x8</span>
+                </div>
+            </div>
+            <div class="swipe-hint">›</div>
+        </div>
+        
+        <div class="scroll-indicator" id="indicator-1">
+            <div class="scroll-dot active"></div>
+            <div class="scroll-dot"></div>
+        </div>
+
+        <div class="scroll-container" id="scroll-container-2">
+            <div class="particle-row" id="particle-row-2">
+                <div class="particle-chip" data-type="neutrino" data-count="6">
+                    <span class="dot" style="background:#00ff00;"></span>
+                    <span class="name">中微子</span>
+                    <span class="count">x6</span>
+                </div>
+                <div class="particle-chip" data-type="quark_up" data-count="4">
+                    <span class="dot" style="background:#ff8800;"></span>
+                    <span class="name">上夸克</span>
+                    <span class="count">x4</span>
+                </div>
+                <div class="particle-chip" data-type="quark_down" data-count="4">
+                    <span class="dot" style="background:#8800ff;"></span>
+                    <span class="name">下夸克</span>
+                    <span class="count">x4</span>
+                </div>
+                <div class="particle-chip" data-type="alpha" data-count="2">
+                    <span class="dot" style="background:#ff66cc;"></span>
+                    <span class="name">α粒子</span>
+                    <span class="count">x2</span>
+                </div>
+            </div>
+            <div class="swipe-hint">›</div>
+        </div>
+        
+        <div class="scroll-indicator" id="indicator-2">
+            <div class="scroll-dot active"></div>
+            <div class="scroll-dot"></div>
+        </div>
+    </div>
+
+    <!-- 场景面板 -->
+    <div class="slide-panel" id="preset-panel">
+        <div class="panel-title">场景预设</div>
+        <div class="preset-grid">
+            <div class="preset-btn" onclick="loadPreset('atom')">氢原子</div>
+            <div class="preset-btn" onclick="loadPreset('solar')">太阳系</div>
+            <div class="preset-btn" onclick="loadPreset('collision')">对撞机</div>
+            <div class="preset-btn" onclick="loadPreset('plasma')">等离子体</div>
+            <div class="preset-btn" onclick="loadPreset('nebula')">星云</div>
+            <div class="preset-btn" onclick="loadPreset('bigbang')">大爆炸</div>
+            <div class="preset-btn" onclick="loadPreset('crystal')">晶格</div>
+            <div class="preset-btn" onclick="loadPreset('binary')">双星</div>
+            <div class="preset-btn" onclick="loadPreset('fission')">核裂变</div>
+        </div>
+    </div>
+
+    <!-- 参数面板 -->
+    <div class="slide-panel" id="param-panel">
+        <div class="panel-title">物理参数</div>
+        <div class="force-toggles">
+            <div class="force-chip active" id="force-em" onclick="toggleForce('em')">
+                <span class="force-dot" style="background:#ff6b6b;"></span>电磁
+            </div>
+            <div class="force-chip active" id="force-grav" onclick="toggleForce('grav')">
+                <span class="force-dot" style="background:#4ecdc4;"></span>引力
+            </div>
+            <div class="force-chip active" id="force-strong" onclick="toggleForce('strong')">
+                <span class="force-dot" style="background:#ffe66d;"></span>强力
+            </div>
+            <div class="force-chip" id="force-weak" onclick="toggleForce('weak')">
+                <span class="force-dot" style="background:#a8e6cf;"></span>弱力
+            </div>
+        </div>
+        <div class="param-row">
+            <span class="param-name">库仑常数</span>
+            <input type="range" class="param-slider" min="0" max="10000" value="1000" oninput="updateParam('k', this.value)">
+            <span class="param-value" id="val-k">1000</span>
+        </div>
+        <div class="param-row">
+            <span class="param-name">引力常数</span>
+            <input type="range" class="param-slider" min="0" max="5" step="0.1" value="0.5" oninput="updateParam('G', this.value)">
+            <span class="param-value" id="val-G">0.5</span>
+        </div>
+        <div class="param-row">
+            <span class="param-name">强力强度</span>
+            <input type="range" class="param-slider" min="0" max="300" value="50" oninput="updateParam('strong', this.value)">
+            <span class="param-value" id="val-strong">50</span>
+        </div>
+        <div class="param-row">
+            <span class="param-name">时间流速</span>
+            <input type="range" class="param-slider" min="0.1" max="3" step="0.1" value="1" oninput="updateParam('dt', this.value)">
+            <span class="param-value" id="val-dt">1.0x</span>
+        </div>
+        <div class="param-row">
+            <span class="param-name">阻尼系数</span>
+            <input type="range" class="param-slider" min="0.9" max="1" step="0.001" value="0.995" oninput="updateParam('damping', this.value)">
+            <span class="param-value" id="val-damping">0.995</span>
+        </div>
+    </div>
+
+    <!-- 底部控制栏 -->
+    <div id="bottom-bar">
+        <button class="bar-btn" id="btn-particles" onclick="togglePanel('particle')">
+            <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 11h-4v4h-2v-4H7v-2h4V7h2v4h4v2z"/></svg>
+            <span>粒子</span>
+        </button>
+        <button class="bar-btn" id="btn-presets" onclick="togglePanel('preset')">
+            <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+            <span>场景</span>
+        </button>
+        <button class="bar-btn" id="btn-params" onclick="togglePanel('param')">
+            <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84a.484.484 0 0 0-.48.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L3.16 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.48-.41l.36-2.54c.59-.24 1.13-.58 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+            <span>参数</span>
+        </button>
+        <button class="bar-btn" id="btn-pause" onclick="pauseSim()">
+            <svg viewBox="0 0 24 24" id="icon-pause"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+            <svg viewBox="0 0 24 24" id="icon-play" style="display:none"><path d="M8 5v14l11-7z"/></svg>
+            <span>暂停</span>
+        </button>
+        <button class="bar-btn" onclick="clearUniverse()">
+            <svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+            <span>清空</span>
+        </button>
+        <button class="bar-btn" id="btn-trails" onclick="toggleTrails()">
+            <svg viewBox="0 0 24 24"><path d="M2 12c0 5.52 4.48 10 10 10s10-4.48 10-10S17.52 2 12 2 2 6.48 2 12zm10-6c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2 .9-2 2-2zm0 12c-2.76 0-5.26-1.12-7.07-2.93C6.72 13.68 9.53 13 12 13s5.28.68 7.07 2.07C17.26 16.88 14.76 18 12 18z"/></svg>
+            <span>轨迹</span>
+        </button>
+    </div>
+
+    <!-- 引导层 -->
+    <div id="hint-overlay">
+        <div class="hint-content">
+            <h2>粒子宇宙</h2>
+            <div class="hint-item">
+                <div class="hint-icon">👆</div>
+                <span>单指点击生成粒子</span>
+            </div>
+            <div class="hint-item">
+                <div class="hint-icon">✋</div>
+                <span>单指滑动平移视角</span>
+            </div>
+            <div class="hint-item">
+                <div class="hint-icon">👆👆</div>
+                <span>双指捏合缩放视图</span>
+            </div>
+            <div class="hint-item">
+                <div class="hint-icon">⏱️</div>
+                <span>长按产生力场</span>
+            </div>
+            <button class="hint-start" onclick="startSim()">开始探索</button>
+        </div>
+    </div>
+
+    <script>
+        // ==================== 物理引擎 ====================
+        const canvas = document.getElementById('universe');
+        const ctx = canvas.getContext('2d', { alpha: false });
+        
+        let width, height;
+        let particles = [];
+        let paused = false;
+        let showTrails = true;
+        let simTime = 0;
+        let lastTime = 0;
+        let frameCount = 0;
+        let fps = 60;
+        
+        let viewScale = 1;
+        let viewOffsetX = 0;
+        let viewOffsetY = 0;
+        
+        // 触摸状态
+        let touches = new Map();
+        let lastTouchDist = 0;
+        let isLongPress = false;
+        let longPressTimer = null;
+        let touchStartPos = { x: 0, y: 0, screenX: 0, screenY: 0 };
+        let isDragging = false;
+        let dragThreshold = 8;
+
+        const physics = {
+            k: 1000,
+            G: 0.5,
+            strong: 50,
+            dt: 0.05,
+            damping: 0.995,
+            forces: {
+                em: true,
+                grav: true,
+                strong: true,
+                weak: false
+            }
+        };
+
+        const particleTypes = {
+            electron: { mass: 0.1, charge: -1, color: '#00ffff', size: 5, glow: 12, name: '电子' },
+            proton: { mass: 1.0, charge: 1, color: '#ff4444', size: 9, glow: 18, name: '质子' },
+            neutron: { mass: 1.0, charge: 0, color: '#aaaaaa', size: 9, glow: 0, name: '中子' },
+            photon: { mass: 0, charge: 0, color: '#ffff00', size: 3, glow: 20, name: '光子', speed: 10 },
+            neutrino: { mass: 0.01, charge: 0, color: '#00ff00', size: 2.5, glow: 0, name: '中微子' },
+            quark_up: { mass: 0.3, charge: 2/3, color: '#ff8800', size: 6, glow: 10, name: '上夸克' },
+            quark_down: { mass: 0.3, charge: -1/3, color: '#8800ff', size: 6, glow: 10, name: '下夸克' },
+            alpha: { mass: 4, charge: 2, color: '#ff66cc', size: 12, glow: 15, name: 'α粒子' }
+        };
+
+        class Particle {
+            constructor(x, y, vx, vy, type) {
+                this.x = x;
+                this.y = y;
+                this.vx = vx;
+                this.vy = vy;
+                this.type = type;
+                const spec = particleTypes[type];
+                this.mass = spec.mass;
+                this.charge = spec.charge;
+                this.color = spec.color;
+                this.size = spec.size;
+                this.glow = spec.glow;
+                this.name = spec.name;
+                this.trail = [];
+                this.maxTrail = 40;
+                this.fx = 0;
+                this.fy = 0;
+                this.lifetime = type === 'photon' ? 300 + Math.random() * 200 : Infinity;
+                this.age = 0;
+                this.pulse = Math.random() * Math.PI * 2;
+                this.birthScale = 0;
+            }
+
+            update() {
+                if (this.birthScale < 1) this.birthScale += 0.05;
+                
+                const dt = physics.dt;
+                if (this.mass > 0) {
+                    this.vx += (this.fx / this.mass) * dt;
+                    this.vy += (this.fy / this.mass) * dt;
+                }
+                
+                if (this.type === 'photon') {
+                    const speed = Math.sqrt(this.vx*this.vx + this.vy*this.vy);
+                    if (speed > 0) {
+                        const targetSpeed = particleTypes.photon.speed;
+                        this.vx = (this.vx / speed) * targetSpeed;
+                        this.vy = (this.vy / speed) * targetSpeed;
+                    }
+                }
+
+                this.vx *= physics.damping;
+                this.vy *= physics.damping;
+                this.x += this.vx * dt;
+                this.y += this.vy * dt;
+
+                if (showTrails && frameCount % 2 === 0) {
+                    this.trail.push({ x: this.x, y: this.y, age: 0 });
+                    if (this.trail.length > this.maxTrail) this.trail.shift();
+                }
+                
+                this.trail.forEach(t => t.age++);
+                this.age++;
+                this.pulse += 0.08;
+                
+                return this.age < this.lifetime;
+            }
+
+            draw(ctx) {
+                const sx = (this.x - viewOffsetX) * viewScale + width/2;
+                const sy = (this.y - viewOffsetY) * viewScale + height/2;
+                const sSize = this.size * viewScale * this.birthScale;
+
+                if (sx < -60 || sx > width + 60 || sy < -60 || sy > height + 60) return;
+
+                if (showTrails && this.trail.length > 1) {
+                    for (let i = 0; i < this.trail.length - 1; i++) {
+                        const t = this.trail[i];
+                        const next = this.trail[i+1];
+                        const tx1 = (t.x - viewOffsetX) * viewScale + width/2;
+                        const ty1 = (t.y - viewOffsetY) * viewScale + height/2;
+                        const tx2 = (next.x - viewOffsetX) * viewScale + width/2;
+                        const ty2 = (next.y - viewOffsetY) * viewScale + height/2;
+                        
+                        const alpha = Math.pow(1 - t.age / this.maxTrail, 2) * 0.4;
+                        ctx.strokeStyle = this.color + Math.floor(alpha * 255).toString(16).padStart(2, '0');
+                        ctx.lineWidth = sSize * 0.2 * (1 - t.age / this.maxTrail);
+                        ctx.lineCap = 'round';
+                        ctx.beginPath();
+                        ctx.moveTo(tx1, ty1);
+                        ctx.lineTo(tx2, ty2);
+                        ctx.stroke();
+                    }
+                }
+
+                if (this.glow > 0) {
+                    const pulseSize = this.glow * (1 + Math.sin(this.pulse) * 0.08) * viewScale;
+                    const gradient = ctx.createRadialGradient(sx, sy, 0, sx, sy, pulseSize);
+                    gradient.addColorStop(0, this.color + '30');
+                    gradient.addColorStop(0.5, this.color + '10');
+                    gradient.addColorStop(1, this.color + '00');
+                    ctx.fillStyle = gradient;
+                    ctx.beginPath();
+                    ctx.arc(sx, sy, pulseSize, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(sx, sy, sSize, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.fillStyle = 'rgba(255,255,255,0.6)';
+                ctx.beginPath();
+                ctx.arc(sx - sSize*0.3, sy - sSize*0.3, sSize*0.35, 0, Math.PI * 2);
+                ctx.fill();
+
+                if (this.charge !== 0 && viewScale > 0.5) {
+                    ctx.fillStyle = 'rgba(255,255,255,0.9)';
+                    ctx.font = `bold ${sSize * 1.2}px Arial`;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(this.charge > 0 ? '+' : '−', sx, sy);
+                }
+            }
+
+            resetForce() {
+                this.fx = 0;
+                this.fy = 0;
+            }
+        }
+
+        // ==================== 力计算 ====================
+        function calculateForces() {
+            const n = particles.length;
+            for (let i = 0; i < n; i++) particles[i].resetForce();
+
+            for (let i = 0; i < n; i++) {
+                for (let j = i + 1; j < n; j++) {
+                    const p1 = particles[i];
+                    const p2 = particles[j];
+                    
+                    const dx = p2.x - p1.x;
+                    const dy = p2.y - p1.y;
+                    const r2 = dx*dx + dy*dy;
+                    const r = Math.sqrt(r2);
+                    
+                    if (r < 8) continue;
+                    const nx = dx / r;
+                    const ny = dy / r;
+
+                    if (physics.forces.em && p1.charge !== 0 && p2.charge !== 0) {
+                        const f = physics.k * p1.charge * p2.charge / (r2 + 15);
+                        p1.fx += f * nx; p1.fy += f * ny;
+                        p2.fx -= f * nx; p2.fy -= f * ny;
+                    }
+
+                    if (physics.forces.grav && p1.mass > 0 && p2.mass > 0) {
+                        const f = physics.G * p1.mass * p2.mass / (r2 + 80);
+                        p1.fx += f * nx; p1.fy += f * ny;
+                        p2.fx -= f * nx; p2.fy -= f * ny;
+                    }
+
+                    if (physics.forces.strong && r < 250) {
+                        const isHadron = ['proton','neutron','quark_up','quark_down','alpha'].includes(p1.type) &&
+                                        ['proton','neutron','quark_up','quark_down','alpha'].includes(p2.type);
+                        if (isHadron) {
+                            const f = -physics.strong * Math.exp(-r/50);
+                            p1.fx += f * nx; p1.fy += f * ny;
+                            p2.fx -= f * nx; p2.fy -= f * ny;
+                        }
+                    }
+
+                    if (physics.forces.weak && r < 50 && Math.random() < 0.002) {
+                        const scatter = 0.8;
+                        p1.vx += (Math.random() - 0.5) * scatter;
+                        p1.vy += (Math.random() - 0.5) * scatter;
+                        p2.vx += (Math.random() - 0.5) * scatter;
+                        p2.vy += (Math.random() - 0.5) * scatter;
+                    }
+                }
+            }
+        }
+
+        // ==================== 场景 ====================
+        function loadPreset(name) {
+            clearUniverse();
+            closeAllPanels();
+            const cx = 0, cy = 0;
+
+            switch(name) {
+                case 'atom':
+                    particles.push(new Particle(cx, cy, 0, 0, 'proton'));
+                    for (let i = 0; i < 6; i++) {
+                        const angle = (Math.PI * 2 / 6) * i;
+                        const r = 120 + Math.random()*40;
+                        const speed = Math.sqrt(physics.k * 1 / r) * 1.2;
+                        particles.push(new Particle(
+                            cx + Math.cos(angle)*r, cy + Math.sin(angle)*r,
+                            -Math.sin(angle)*speed, Math.cos(angle)*speed,
+                            'electron'
+                        ));
+                    }
+                    break;
+
+                case 'solar':
+                    particles.push(new Particle(cx, cy, 0, 0, 'proton'));
+                    particles[0].mass = 100;
+                    particles[0].size = 22;
+                    particles[0].glow = 45;
+                    const orbits = [100, 160, 230, 310, 400, 500];
+                    orbits.forEach((r, i) => {
+                        const speed = Math.sqrt(physics.G * 100 / r);
+                        const angle = Math.random() * Math.PI * 2;
+                        particles.push(new Particle(
+                            cx + Math.cos(angle)*r, cy + Math.sin(angle)*r,
+                            -Math.sin(angle)*speed, Math.cos(angle)*speed,
+                            i % 2 === 0 ? 'electron' : 'neutron'
+                        ));
+                        particles[particles.length-1].mass = 1;
+                    });
+                    break;
+
+                case 'collision':
+                    for (let i = 0; i < 20; i++) {
+                        const y = (i-10)*40;
+                        particles.push(new Particle(-400, y, 12, (Math.random()-0.5)*3, 'proton'));
+                        particles.push(new Particle(400, y, -12, (Math.random()-0.5)*3, 'proton'));
+                    }
+                    break;
+
+                case 'plasma':
+                    for (let i = 0; i < 80; i++) {
+                        const t = Math.random() > 0.5 ? 'electron' : 'proton';
+                        particles.push(new Particle(
+                            (Math.random()-0.5)*800,
+                            (Math.random()-0.5)*600,
+                            (Math.random()-0.5)*15,
+                            (Math.random()-0.5)*15,
+                            t
+                        ));
+                    }
+                    break;
+
+                case 'nebula':
+                    for (let i = 0; i < 100; i++) {
+                        const angle = Math.random() * Math.PI * 2;
+                        const r = Math.random() * 400;
+                        const types = ['proton','neutron','electron','photon','neutrino'];
+                        const speed = Math.sqrt(3000/(r+50)) * 0.8;
+                        particles.push(new Particle(
+                            Math.cos(angle)*r, Math.sin(angle)*r,
+                            -Math.sin(angle)*speed + (Math.random()-0.5),
+                            Math.cos(angle)*speed + (Math.random()-0.5),
+                            types[Math.floor(Math.random()*types.length)]
+                        ));
+                    }
+                    break;
+
+                case 'bigbang':
+                    for (let i = 0; i < 100; i++) {
+                        const angle = Math.random() * Math.PI * 2;
+                        const speed = Math.random() * 8 + 2;
+                        const types = ['quark_up','quark_down','electron','photon','neutrino','proton'];
+                        particles.push(new Particle(cx, cy,
+                            Math.cos(angle)*speed,
+                            Math.sin(angle)*speed,
+                            types[Math.floor(Math.random()*types.length)]
+                        ));
+                    }
+                    break;
+
+                case 'crystal':
+                    const spacing = 80;
+                    const rows = 8;
+                    const cols = 10;
+                    const startX = -(cols*spacing)/2;
+                    const startY = -(rows*spacing)/2;
+                    for (let r = 0; r < rows; r++) {
+                        for (let c = 0; c < cols; c++) {
+                            const t = (r+c)%2 === 0 ? 'proton' : 'electron';
+                            particles.push(new Particle(
+                                startX + c*spacing + (r%2)*spacing/2,
+                                startY + r*spacing*0.866,
+                                0, 0, t
+                            ));
+                        }
+                    }
+                    break;
+
+                case 'binary':
+                    particles.push(new Particle(-150, 0, 0, 3, 'proton'));
+                    particles[0].mass = 60;
+                    particles[0].size = 18;
+                    particles.push(new Particle(150, 0, 0, -3, 'proton'));
+                    particles[1].mass = 60;
+                    particles[1].size = 18;
+                    for (let i = 0; i < 12; i++) {
+                        const angle = Math.random() * Math.PI * 2;
+                        const r = 250 + Math.random()*150;
+                        particles.push(new Particle(
+                            Math.cos(angle)*r, Math.sin(angle)*r,
+                            -Math.sin(angle)*2, Math.cos(angle)*2,
+                            'electron'
+                        ));
+                    }
+                    break;
+
+                case 'fission':
+                    particles.push(new Particle(cx, cy, 0, 0, 'alpha'));
+                    particles[0].mass = 150;
+                    particles[0].size = 30;
+                    particles[0].glow = 35;
+                    for (let i = 0; i < 30; i++) {
+                        const angle = Math.random() * Math.PI * 2;
+                        const speed = Math.random() * 5 + 1;
+                        particles.push(new Particle(cx, cy,
+                            Math.cos(angle)*speed,
+                            Math.sin(angle)*speed,
+                            Math.random() > 0.5 ? 'neutron' : 'proton'
+                        ));
+                    }
+                    break;
+            }
+            
+            viewOffsetX = 0;
+            viewOffsetY = 0;
+            viewScale = 1;
+        }
+
+        // ==================== 控制 ====================
+        function addParticles(type, count) {
+            const spawnRange = Math.min(width, height) / viewScale;
+            for (let i = 0; i < count; i++) {
+                particles.push(new Particle(
+                    viewOffsetX + (Math.random() - 0.5) * spawnRange * 0.8,
+                    viewOffsetY + (Math.random() - 0.5) * spawnRange * 0.8,
+                    (Math.random() - 0.5) * 5,
+                    (Math.random() - 0.5) * 5,
+                    type
+                ));
+            }
+        }
+
+        function clearUniverse() {
+            particles = [];
+            simTime = 0;
+        }
+
+        function pauseSim() {
+            paused = !paused;
+            const pauseBtn = document.getElementById('btn-pause');
+            const iconPause = document.getElementById('icon-pause');
+            const iconPlay = document.getElementById('icon-play');
+            
+            if (paused) {
+                iconPause.style.display = 'none';
+                iconPlay.style.display = 'block';
+                pauseBtn.querySelector('span').textContent = '继续';
+            } else {
+                iconPause.style.display = 'block';
+                iconPlay.style.display = 'none';
+                pauseBtn.querySelector('span').textContent = '暂停';
+            }
+        }
+
+        function toggleTrails() {
+            showTrails = !showTrails;
+            document.getElementById('btn-trails').classList.toggle('active');
+        }
+
+        function toggleForce(force) {
+            physics.forces[force] = !physics.forces[force];
+            const btn = document.getElementById('force-' + force);
+            btn.classList.toggle('active');
+        }
+
+        function updateParam(name, value) {
+            physics[name] = parseFloat(value);
+            document.getElementById('val-' + name).textContent = value;
+        }
+
+        function togglePanel(type) {
+            closeAllPanels();
+            const panel = document.getElementById(type + '-panel');
+            const btn = document.getElementById('btn-' + (type === 'param' ? 'params' : type + 's'));
+            
+            if (panel.classList.contains('open')) {
+                panel.classList.remove('open');
+                btn.classList.remove('active');
+            } else {
+                panel.classList.add('open');
+                btn.classList.add('active');
+                document.getElementById('mask').classList.add('active');
+            }
+        }
+
+        function closeAllPanels() {
+            document.querySelectorAll('.slide-panel').forEach(p => p.classList.remove('open'));
+            document.querySelectorAll('.bar-btn').forEach(b => {
+                if (b.id !== 'btn-pause' && b.id !== 'btn-trails') b.classList.remove('active');
+            });
+            document.getElementById('mask').classList.remove('active');
+        }
+
+        function startSim() {
+            document.getElementById('hint-overlay').classList.add('hidden');
+            loadPreset('atom');
+        }
+
+        // ==================== 渲染 ====================
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight - 56;
+            canvas.width = width;
+            canvas.height = height;
+        }
+
+        function drawGrid() {
+            const gridSize = 80 * viewScale;
+            const offsetX = ((-viewOffsetX * viewScale + width/2) % gridSize + gridSize) % gridSize;
+            const offsetY = ((-viewOffsetY * viewScale + height/2) % gridSize + gridSize) % gridSize;
+            
+            ctx.strokeStyle = 'rgba(255,255,255,0.02)';
+            ctx.lineWidth = 1;
+            
+            for (let x = offsetX - gridSize; x < width; x += gridSize) {
+                ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, height); ctx.stroke();
+            }
+            for (let y = offsetY - gridSize; y < height; y += gridSize) {
+                ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(width, y); ctx.stroke();
+            }
+
+            const originX = (-viewOffsetX * viewScale + width/2);
+            const originY = (-viewOffsetY * viewScale + height/2);
+            
+            if (originX > 0 && originX < width) {
+                ctx.strokeStyle = 'rgba(0, 212, 255, 0.06)';
+                ctx.beginPath(); ctx.moveTo(originX, 0); ctx.lineTo(originX, height); ctx.stroke();
+            }
+            if (originY > 0 && originY < height) {
+                ctx.strokeStyle = 'rgba(0, 212, 255, 0.06)';
+                ctx.beginPath(); ctx.moveTo(0, originY); ctx.lineTo(width, originY); ctx.stroke();
+            }
+        }
+
+        function drawStrongBonds() {
+            if (!physics.forces.strong) return;
+            
+            ctx.setLineDash([4, 4]);
+            for (let i = 0; i < particles.length; i++) {
+                for (let j = i+1; j < particles.length; j++) {
+                    const dx = particles[i].x - particles[j].x;
+                    const dy = particles[i].y - particles[j].y;
+                    const dist = Math.sqrt(dx*dx + dy*dy);
+                    
+                    if (dist < 150) {
+                        const x1 = (particles[i].x - viewOffsetX) * viewScale + width/2;
+                        const y1 = (particles[i].y - viewOffsetY) * viewScale + height/2;
+                        const x2 = (particles[j].x - viewOffsetX) * viewScale + width/2;
+                        const y2 = (particles[j].y - viewOffsetY) * viewScale + height/2;
+                        
+                        const alpha = (1 - dist/150) * 0.12;
+                        ctx.strokeStyle = `rgba(255, 230, 109, ${alpha})`;
+                        ctx.lineWidth = 1.5;
+                        ctx.beginPath();
+                        ctx.moveTo(x1, y1);
+                        ctx.lineTo(x2, y2);
+                        ctx.stroke();
+                    }
+                }
+            }
+            ctx.setLineDash([]);
+        }
+
+        function updateStats() {
+            let totalEnergy = 0;
+            particles.forEach(p => {
+                const v2 = p.vx*p.vx + p.vy*p.vy;
+                totalEnergy += 0.5 * p.mass * v2;
+            });
+
+            document.getElementById('hud-fps').textContent = fps;
+            document.getElementById('hud-particles').textContent = particles.length;
+            document.getElementById('hud-energy').textContent = totalEnergy.toFixed(0);
+            document.getElementById('hud-time').textContent = simTime.toFixed(1) + 's';
+        }
+
+        function animate(timestamp) {
+            if (!lastTime) lastTime = timestamp;
+            const delta = timestamp - lastTime;
+            lastTime = timestamp;
+            
+            frameCount++;
+            if (frameCount % 30 === 0) {
+                fps = Math.round(1000 / delta);
+            }
+
+            if (!paused) {
+                calculateForces();
+                particles = particles.filter(p => p.update());
+                simTime += physics.dt;
+            }
+
+            ctx.fillStyle = 'rgba(2, 2, 4, 0.2)';
+            ctx.fillRect(0, 0, width, height);
+
+            drawGrid();
+            drawStrongBonds();
+            particles.forEach(p => p.draw(ctx));
+
+            if (isLongPress && touches.size === 1) {
+                const t = Array.from(touches.values())[0];
+                const sx = (t.x - viewOffsetX) * viewScale + width/2;
+                const sy = (t.y - viewOffsetY) * viewScale + height/2;
+                
+                ctx.strokeStyle = 'rgba(0, 212, 255, 0.3)';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(sx, sy, 60 * viewScale, 0, Math.PI * 2);
+                ctx.stroke();
+                
+                ctx.fillStyle = 'rgba(0, 212, 255, 0.1)';
+                ctx.beginPath();
+                ctx.arc(sx, sy, 60 * viewScale, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            updateStats();
+            requestAnimationFrame(animate);
+        }
+
+        // ==================== 粒子列表滑动系统 ====================
+        class ScrollList {
+            constructor(containerId, rowId, indicatorId) {
+                this.container = document.getElementById(containerId);
+                this.row = document.getElementById(rowId);
+                this.indicator = document.getElementById(indicatorId);
+                this.chips = this.row.querySelectorAll('.particle-chip');
+                
+                this.scrollX = 0;
+                this.maxScroll = 0;
+                this.isDragging = false;
+                this.startX = 0;
+                this.startScrollX = 0;
+                this.velocity = 0;
+                this.lastX = 0;
+                this.lastTime = 0;
+                this.animationId = null;
+                
+                this.init();
+            }
+            
+            init() {
+                // 计算最大滚动距离
+                this.updateMaxScroll();
+                
+                // 绑定事件
+                this.row.addEventListener('touchstart', this.onTouchStart.bind(this), { passive: false });
+                this.row.addEventListener('touchmove', this.onTouchMove.bind(this), { passive: false });
+                this.row.addEventListener('touchend', this.onTouchEnd.bind(this), { passive: false });
+                this.row.addEventListener('touchcancel', this.onTouchEnd.bind(this), { passive: false });
+                
+                // 鼠标支持
+                this.row.addEventListener('mousedown', this.onMouseDown.bind(this));
+                window.addEventListener('resize', () => this.updateMaxScroll());
+                
+                // 芯片点击
+                this.chips.forEach(chip => {
+                    chip.addEventListener('click', (e) => {
+                        if (!this.isDragging && Math.abs(this.velocity) < 1) {
+                            const type = chip.dataset.type;
+                            const count = parseInt(chip.dataset.count);
+                            addParticles(type, count);
+                            
+                            // 点击反馈动画
+                            chip.style.transform = 'scale(0.9)';
+                            setTimeout(() => {
+                                chip.style.transform = '';
+                            }, 150);
+                            
+                            if (navigator.vibrate) navigator.vibrate(30);
+                        }
+                    });
+                });
+                
+                this.updateIndicator();
+            }
+            
+            updateMaxScroll() {
+                const containerWidth = this.container.offsetWidth;
+                const rowWidth = this.row.scrollWidth;
+                this.maxScroll = Math.max(0, rowWidth - containerWidth);
+                
+                // 显示/隐藏滑动提示
+                if (this.maxScroll > 0) {
+                    this.container.classList.add('can-scroll');
+                } else {
+                    this.container.classList.remove('can-scroll');
+                }
+                
+                // 限制滚动范围
+                this.scrollX = Math.max(0, Math.min(this.scrollX, this.maxScroll));
+                this.applyScroll();
+            }
+            
+            onTouchStart(e) {
+                e.stopPropagation();
+                const touch = e.touches[0];
+                this.isDragging = true;
+                this.startX = touch.clientX;
+                this.startScrollX = this.scrollX;
+                this.velocity = 0;
+                this.lastX = touch.clientX;
+                this.lastTime = Date.now();
+                
+                this.cancelAnimation();
+                this.row.style.cursor = 'grabbing';
+            }
+            
+            onTouchMove(e) {
+                if (!this.isDragging) return;
+                e.preventDefault();
+                e.stopPropagation();
+                
+                const touch = e.touches[0];
+                const dx = this.startX - touch.clientX;
+                this.scrollX = Math.max(0, Math.min(this.startScrollX + dx, this.maxScroll));
+                
+                // 计算速度
+                const now = Date.now();
+                const dt = now - this.lastTime;
+                if (dt > 0) {
+                    this.velocity = (this.lastX - touch.clientX) / dt * 16;
+                }
+                this.lastX = touch.clientX;
+                this.lastTime = now;
+                
+                this.applyScroll();
+                this.updateIndicator();
+            }
+            
+            onTouchEnd(e) {
+                if (!this.isDragging) return;
+                this.isDragging = false;
+                this.row.style.cursor = 'grab';
+                
+                // 惯性滚动
+                if (Math.abs(this.velocity) > 2) {
+                    this.inertiaScroll();
+                }
+            }
+            
+            onMouseDown(e) {
+                e.preventDefault();
+                this.isDragging = true;
+                this.startX = e.clientX;
+                this.startScrollX = this.scrollX;
+                this.velocity = 0;
+                this.lastX = e.clientX;
+                this.lastTime = Date.now();
+                
+                this.cancelAnimation();
+                
+                const onMouseMove = (e) => {
+                    if (!this.isDragging) return;
+                    const dx = this.startX - e.clientX;
+                    this.scrollX = Math.max(0, Math.min(this.startScrollX + dx, this.maxScroll));
+                    
+                    const now = Date.now();
+                    const dt = now - this.lastTime;
+                    if (dt > 0) {
+                        this.velocity = (this.lastX - e.clientX) / dt * 16;
+                    }
+                    this.lastX = e.clientX;
+                    this.lastTime = now;
+                    
+                    this.applyScroll();
+                    this.updateIndicator();
+                };
+                
+                const onMouseUp = () => {
+                    this.isDragging = false;
+                    if (Math.abs(this.velocity) > 2) {
+                        this.inertiaScroll();
+                    }
+                    document.removeEventListener('mousemove', onMouseMove);
+                    document.removeEventListener('mouseup', onMouseUp);
+                };
+                
+                document.addEventListener('mousemove', onMouseMove);
+                document.addEventListener('mouseup', onMouseUp);
+            }
+            
+            inertiaScroll() {
+                const deceleration = 0.92;
+                const minVelocity = 0.5;
+                
+                const step = () => {
+                    this.velocity *= deceleration;
+                    
+                    if (Math.abs(this.velocity) < minVelocity) {
+                        this.velocity = 0;
+                        return;
+                    }
+                    
+                    this.scrollX = Math.max(0, Math.min(this.scrollX + this.velocity, this.maxScroll));
+                    this.applyScroll();
+                    this.updateIndicator();
+                    
+                    this.animationId = requestAnimationFrame(step);
+                };
+                
+                this.animationId = requestAnimationFrame(step);
+            }
+            
+            cancelAnimation() {
+                if (this.animationId) {
+                    cancelAnimationFrame(this.animationId);
+                    this.animationId = null;
+                }
+            }
+            
+            applyScroll() {
+                this.row.style.transform = `translateX(-${this.scrollX}px)`;
+            }
+            
+            updateIndicator() {
+                if (!this.indicator || this.maxScroll <= 0) return;
+                
+                const dots = this.indicator.querySelectorAll('.scroll-dot');
+                const progress = this.scrollX / this.maxScroll;
+                const activeIndex = Math.round(progress * (dots.length - 1));
+                
+                dots.forEach((dot, i) => {
+                    dot.classList.toggle('active', i === activeIndex);
+                });
+            }
+        }
+
+        // 初始化滑动列表
+        let scrollList1, scrollList2;
+
+        function initScrollLists() {
+            scrollList1 = new ScrollList('scroll-container-1', 'particle-row-1', 'indicator-1');
+            scrollList2 = new ScrollList('scroll-container-2', 'particle-row-2', 'indicator-2');
+        }
+
+        // ==================== 画布触摸交互 ====================
+        function getTouchPos(touch) {
+            const rect = canvas.getBoundingClientRect();
+            return {
+                x: (touch.clientX - rect.left - width/2) / viewScale + viewOffsetX,
+                y: (touch.clientY - rect.top - height/2) / viewScale + viewOffsetY,
+                screenX: touch.clientX - rect.left,
+                screenY: touch.clientY - rect.top
+            };
+        }
+
+        function getTouchDistance(t1, t2) {
+            const dx = t1.screenX - t2.screenX;
+            const dy = t1.screenY - t2.screenY;
+            return Math.sqrt(dx*dx + dy*dy);
+        }
+
+        canvas.addEventListener('touchstart', e => {
+            // 如果触摸在面板内，不处理画布事件
+            if (e.target.closest('.slide-panel')) return;
+            
+            e.preventDefault();
+            
+            for (let touch of e.changedTouches) {
+                const pos = getTouchPos(touch);
+                touches.set(touch.identifier, { ...pos, id: touch.identifier });
+            }
+
+            if (touches.size === 1) {
+                const t = Array.from(touches.values())[0];
+                touchStartPos = { x: t.screenX, y: t.screenY };
+                isDragging = false;
+                
+                longPressTimer = setTimeout(() => {
+                    if (!isDragging) {
+                        isLongPress = true;
+                        if (navigator.vibrate) navigator.vibrate(50);
+                    }
+                }, 400);
+            } else if (touches.size === 2) {
+                clearTimeout(longPressTimer);
+                isLongPress = false;
+                isDragging = false;
+                const ts = Array.from(touches.values());
+                lastTouchDist = getTouchDistance(ts[0], ts[1]);
+            }
+        }, { passive: false });
+
+        canvas.addEventListener('touchmove', e => {
+            if (e.target.closest('.slide-panel')) return;
+            e.preventDefault();
+            
+            if (touches.size === 1) {
+                const touch = e.touches[0];
+                const pos = getTouchPos(touch);
+                const oldPos = touches.get(touch.identifier);
+                
+                if (oldPos) {
+                    const dx = pos.screenX - oldPos.screenX;
+                    const dy = pos.screenY - oldPos.screenY;
+                    const moveDist = Math.sqrt(dx*dx + dy*dy);
+                    
+                    if (moveDist > dragThreshold) {
+                        isDragging = true;
+                        clearTimeout(longPressTimer);
+                    }
+                    
+                    if (isLongPress) {
+                        const wx = (pos.x - viewOffsetX);
+                        const wy = (pos.y - viewOffsetY);
+                        particles.forEach(p => {
+                            const pdx = p.x - pos.x;
+                            const pdy = p.y - pos.y;
+                            const dist = Math.sqrt(pdx*pdx + pdy*pdy);
+                            if (dist < 200 && dist > 5) {
+                                const f = 150 / (dist + 1);
+                                p.vx -= (pdx/dist) * f;
+                                p.vy -= (pdy/dist) * f;
+                            }
+                        });
+                    } else if (isDragging) {
+                        viewOffsetX -= dx / viewScale;
+                        viewOffsetY -= dy / viewScale;
+                    }
+                    
+                    touches.set(touch.identifier, { ...pos, id: touch.identifier });
+                }
+            } else if (touches.size === 2) {
+                const newTouch0 = getTouchPos(e.touches[0]);
+                const newTouch1 = getTouchPos(e.touches[1]);
+                
+                touches.set(e.touches[0].identifier, { ...newTouch0, id: e.touches[0].identifier });
+                touches.set(e.touches[1].identifier, { ...newTouch1, id: e.touches[1].identifier });
+                
+                const newDist = getTouchDistance(newTouch0, newTouch1);
+                
+                if (lastTouchDist > 0 && Math.abs(newDist - lastTouchDist) > 5) {
+                    const scale = newDist / lastTouchDist;
+                    const oldScale = viewScale;
+                    viewScale *= scale;
+                    viewScale = Math.max(0.1, Math.min(5, viewScale));
+                    
+                    const rect = canvas.getBoundingClientRect();
+                    const centerX = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left;
+                    const centerY = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top;
+                    
+                    viewOffsetX += (centerX - width/2) * (1/oldScale - 1/viewScale);
+                    viewOffsetY += (centerY - height/2) * (1/oldScale - 1/viewScale);
+                }
+                
+                lastTouchDist = newDist;
+            }
+        }, { passive: false });
+
+        canvas.addEventListener('touchend', e => {
+            for (let touch of e.changedTouches) {
+                touches.delete(touch.identifier);
+            }
+            
+            clearTimeout(longPressTimer);
+            
+            if (isLongPress) {
+                isLongPress = false;
+            } else if (touches.size === 0 && e.changedTouches.length === 1 && !isDragging) {
+                const t = e.changedTouches[0];
+                const rect = canvas.getBoundingClientRect();
+                const x = (t.clientX - rect.left - width/2) / viewScale + viewOffsetX;
+                const y = (t.clientY - rect.top - height/2) / viewScale + viewOffsetY;
+                
+                const types = Object.keys(particleTypes).filter(t => t !== 'alpha');
+                const type = types[Math.floor(Math.random() * types.length)];
+                particles.push(new Particle(x, y, (Math.random()-0.5)*3, (Math.random()-0.5)*3, type));
+                
+                if (navigator.vibrate) navigator.vibrate(20);
+            }
+            
+            isDragging = false;
+            if (touches.size < 2) {
+                lastTouchDist = 0;
+            }
+        });
+
+        canvas.addEventListener('touchcancel', e => {
+            touches.clear();
+            clearTimeout(longPressTimer);
+            isLongPress = false;
+            isDragging = false;
+            lastTouchDist = 0;
+        });
+
+        // ==================== 鼠标支持 ====================
+        let mouseDown = false;
+        let mouseRightDown = false;
+        let mouseX = 0, mouseY = 0;
+
+        canvas.addEventListener('mousedown', e => {
+            if (e.button === 2) {
+                mouseRightDown = true;
+            } else {
+                mouseDown = true;
+            }
+            const rect = canvas.getBoundingClientRect();
+            mouseX = (e.clientX - rect.left - width/2) / viewScale + viewOffsetX;
+            mouseY = (e.clientY - rect.top - height/2) / viewScale + viewOffsetY;
+        });
+
+        canvas.addEventListener('mousemove', e => {
+            const rect = canvas.getBoundingClientRect();
+            const x = (e.clientX - rect.left - width/2) / viewScale + viewOffsetX;
+            const y = (e.clientY - rect.top - height/2) / viewScale + viewOffsetY;
+            mouseX = x;
+            mouseY = y;
+
+            if (mouseDown) {
+                particles.forEach(p => {
+                    const dx = p.x - x;
+                    const dy = p.y - y;
+                    const dist = Math.sqrt(dx*dx + dy*dy);
+                    if (dist < 200 && dist > 5) {
+                        const f = 150 / (dist + 1);
+                        p.vx -= (dx/dist) * f;
+                        p.vy -= (dy/dist) * f;
+                    }
+                });
+            } else if (mouseRightDown) {
+                particles.forEach(p => {
+                    const dx = p.x - x;
+                    const dy = p.y - y;
+                    const dist = Math.sqrt(dx*dx + dy*dy);
+                    if (dist < 200 && dist > 5) {
+                        const f = 150 / (dist + 1);
+                        p.vx += (dx/dist) * f;
+                        p.vy += (dy/dist) * f;
+                    }
+                });
+            }
+        });
+
+        canvas.addEventListener('mouseup', () => {
+            mouseDown = false;
+            mouseRightDown = false;
+        });
+
+        canvas.addEventListener('click', e => {
+            if (mouseDown) return;
+            const rect = canvas.getBoundingClientRect();
+            const x = (e.clientX - rect.left - width/2) / viewScale + viewOffsetX;
+            const y = (e.clientY - rect.top - height/2) / viewScale + viewOffsetY;
+            
+            const types = Object.keys(particleTypes).filter(t => t !== 'alpha');
+            const type = types[Math.floor(Math.random() * types.length)];
+            particles.push(new Particle(x, y, (Math.random()-0.5)*3, (Math.random()-0.5)*3, type));
+        });
+
+        canvas.addEventListener('wheel', e => {
+            e.preventDefault();
+            const zoomSpeed = 0.1;
+            const oldScale = viewScale;
+            
+            if (e.deltaY < 0) {
+                viewScale *= (1 + zoomSpeed);
+            } else {
+                viewScale *= (1 - zoomSpeed);
+            }
+            
+            viewScale = Math.max(0.1, Math.min(5, viewScale));
+            
+            const rect = canvas.getBoundingClientRect();
+            const mx = (e.clientX - rect.left - width/2) / oldScale + viewOffsetX;
+            const my = (e.clientY - rect.top - height/2) / oldScale + viewOffsetY;
+            
+            viewOffsetX = mx - (e.clientX - rect.left - width/2) / viewScale;
+            viewOffsetY = my - (e.clientY - rect.top - height/2) / viewScale;
+        }, { passive: false });
+
+        canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+        // ==================== 初始化 ====================
+        window.addEventListener('resize', () => {
+            resize();
+            if (scrollList1) scrollList1.updateMaxScroll();
+            if (scrollList2) scrollList2.updateMaxScroll();
+        });
+        
+        resize();
+        initScrollLists();
+        requestAnimationFrame(animate);
+    </script>
+</body>
+</html>
