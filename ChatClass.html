@@ -1,0 +1,1637 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>💬 小蓝聊天室 - 终极稳定版 v2.0</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --glass-bg: rgba(255,255,255,0.08);
+            --glass-border: rgba(255,255,255,0.15);
+            --glass-highlight: rgba(255,255,255,0.25);
+            --primary: #60a5fa;
+            --primary-glow: rgba(96,165,250,0.4);
+            --text-primary: #f0f4f8;
+            --text-secondary: #94a3b8;
+            --bg-1: #0f172a;
+            --bg-2: #1e3a5f;
+            --bg-3: #0c4a6e;
+            --success: #34d399;
+            --warning: #fbbf24;
+            --error: #f87171;
+            --purple: #a78bfa;
+        }
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: linear-gradient(135deg, var(--bg-1) 0%, var(--bg-2) 50%, var(--bg-3) 100%);
+            min-height: 100vh;
+            color: var(--text-primary);
+            overflow: hidden;
+            position: relative;
+        }
+        .bg-particles {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; z-index: 0; overflow: hidden;
+        }
+        .particle {
+            position: absolute; border-radius: 50%;
+            background: radial-gradient(circle, rgba(96,165,250,0.2) 0%, transparent 70%);
+            animation: float 20s infinite ease-in-out;
+        }
+        @keyframes float {
+            0%,100% { transform: translateY(0) translateX(0) scale(1); }
+            25% { transform: translateY(-30px) translateX(20px) scale(1.1); }
+            50% { transform: translateY(20px) translateX(-20px) scale(0.9); }
+            75% { transform: translateY(-10px) translateX(30px) scale(1.05); }
+        }
+        .liquid-glass {
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            border: 1px solid var(--glass-border);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3), inset 0 1px 0 var(--glass-highlight);
+        }
+        .liquid-glass-strong {
+            background: rgba(255,255,255,0.12);
+            backdrop-filter: blur(30px) saturate(200%);
+            -webkit-backdrop-filter: blur(30px) saturate(200%);
+            border: 1px solid rgba(255,255,255,0.2);
+            box-shadow: 0 12px 40px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.3);
+        }
+        .app-container {
+            position: relative; z-index: 1;
+            display: flex; height: 100vh;
+            max-width: 1400px; margin: 0 auto;
+            padding: 16px; gap: 16px;
+        }
+        .sidebar {
+            width: 280px; display: flex;
+            flex-direction: column; gap: 16px; flex-shrink: 0;
+        }
+        .logo-section {
+            padding: 24px 20px; border-radius: 20px; text-align: center;
+        }
+        .logo {
+            font-size: 28px; font-weight: 700;
+            background: linear-gradient(135deg, #60a5fa, #a78bfa);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            margin-bottom: 4px;
+        }
+        .logo-sub { font-size: 12px; color: var(--text-secondary); letter-spacing: 2px; }
+        .room-info {
+            padding: 16px 20px; border-radius: 16px;
+        }
+        .room-label {
+            font-size: 11px; color: var(--text-secondary);
+            text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px;
+        }
+        .room-id-display {
+            font-size: 13px; font-weight: 700;
+            font-family: 'Courier New', monospace;
+            color: var(--primary);
+            text-shadow: 0 0 20px var(--primary-glow);
+            word-break: break-all;
+            line-height: 1.4;
+        }
+        .room-actions {
+            display: flex; gap: 8px; margin-top: 10px;
+        }
+        .room-btn {
+            flex: 1; padding: 8px; border-radius: 10px;
+            border: 1px solid var(--glass-border);
+            background: rgba(255,255,255,0.05); color: var(--text-secondary);
+            font-size: 12px; cursor: pointer; transition: all 0.3s ease;
+            text-align: center;
+        }
+        .room-btn:hover {
+            background: rgba(255,255,255,0.1); color: var(--text-primary);
+            border-color: var(--primary);
+        }
+        .online-panel {
+            flex: 1; border-radius: 20px; padding: 20px;
+            overflow: hidden; display: flex; flex-direction: column;
+        }
+        .panel-title {
+            font-size: 14px; font-weight: 600; color: var(--text-secondary);
+            margin-bottom: 16px; display: flex; align-items: center; gap: 8px;
+        }
+        .online-dot {
+            width: 8px; height: 8px; background: var(--success);
+            border-radius: 50%; box-shadow: 0 0 8px var(--success);
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+        .online-count { margin-left: auto; font-size: 12px; color: var(--text-secondary); }
+        .user-list {
+            flex: 1; overflow-y: auto;
+            display: flex; flex-direction: column; gap: 8px;
+        }
+        .user-list::-webkit-scrollbar { width: 4px; }
+        .user-list::-webkit-scrollbar-track { background: transparent; }
+        .user-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
+        .user-item {
+            display: flex; align-items: center; gap: 10px;
+            padding: 10px 12px; border-radius: 12px;
+            transition: all 0.3s ease;
+        }
+        .user-item:hover { background: rgba(255,255,255,0.05); }
+        .user-avatar {
+            width: 36px; height: 36px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: 600; font-size: 14px; flex-shrink: 0;
+        }
+        .user-name { font-size: 14px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .user-you {
+            font-size: 10px; padding: 2px 8px;
+            background: var(--primary); border-radius: 10px;
+            color: white; margin-left: auto;
+        }
+        .status-panel { padding: 16px 20px; border-radius: 16px; }
+        .status-item {
+            display: flex; align-items: center; justify-content: space-between;
+            font-size: 12px; color: var(--text-secondary); margin-bottom: 8px;
+        }
+        .status-item:last-child { margin-bottom: 0; }
+        .status-value { color: var(--text-primary); font-weight: 500; }
+        .status-value.connected { color: var(--success); }
+        .status-value.connecting { color: var(--warning); }
+        .status-value.disconnected { color: var(--error); }
+        .status-value.p2p { color: var(--purple); }
+        .chat-area {
+            flex: 1; display: flex; flex-direction: column;
+            border-radius: 24px; overflow: hidden;
+        }
+        .chat-header {
+            padding: 20px 28px; border-bottom: 1px solid var(--glass-border);
+            display: flex; align-items: center; justify-content: space-between;
+        }
+        .chat-title { font-size: 18px; font-weight: 600; }
+        .chat-meta { display: flex; align-items: center; gap: 16px; }
+        .connection-badge {
+            display: flex; align-items: center; gap: 6px;
+            padding: 6px 14px; border-radius: 20px;
+            font-size: 12px; font-weight: 500; transition: all 0.3s ease;
+        }
+        .connection-badge.connected { background: rgba(52,211,153,0.15); color: var(--success); }
+        .connection-badge.connecting { background: rgba(251,191,36,0.15); color: var(--warning); animation: blink 1.5s infinite; }
+        .connection-badge.disconnected { background: rgba(248,113,113,0.15); color: var(--error); }
+        .connection-badge.p2p { background: rgba(167,139,250,0.15); color: var(--purple); }
+        @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+        .latency-display {
+            font-size: 12px; color: var(--text-secondary);
+            font-variant-numeric: tabular-nums;
+        }
+        .messages-container {
+            flex: 1; overflow-y: auto; padding: 24px 28px;
+            display: flex; flex-direction: column; gap: 4px;
+        }
+        .messages-container::-webkit-scrollbar { width: 6px; }
+        .messages-container::-webkit-scrollbar-track { background: transparent; }
+        .messages-container::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 6px; }
+        .message-group { display: flex; flex-direction: column; gap: 2px; margin-bottom: 8px; animation: messageIn 0.3s ease-out; }
+        @keyframes messageIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .message-system { text-align: center; padding: 8px 0; }
+        .message-system-text {
+            display: inline-block; padding: 6px 16px;
+            background: rgba(255,255,255,0.05); border-radius: 12px;
+            font-size: 12px; color: var(--text-secondary);
+        }
+        .message-row { display: flex; align-items: flex-end; gap: 10px; max-width: 80%; }
+        .message-row.self { align-self: flex-end; flex-direction: row-reverse; }
+        .message-avatar {
+            width: 36px; height: 36px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: 600; font-size: 14px; flex-shrink: 0;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+        .message-content-wrapper { display: flex; flex-direction: column; gap: 4px; }
+        .message-sender { font-size: 12px; color: var(--text-secondary); padding: 0 4px; }
+        .message-row.self .message-sender { text-align: right; }
+        .message-bubble {
+            padding: 12px 16px; border-radius: 18px;
+            font-size: 14px; line-height: 1.6;
+            word-break: break-word; max-width: 100%;
+        }
+        .message-bubble.other {
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-bottom-left-radius: 4px;
+        }
+        .message-bubble.self {
+            background: linear-gradient(135deg, rgba(96,165,250,0.3), rgba(139,92,246,0.3));
+            border: 1px solid rgba(96,165,250,0.3);
+            border-bottom-right-radius: 4px; color: white;
+        }
+        .message-time { font-size: 11px; color: var(--text-secondary); padding: 0 4px; }
+        .message-row.self .message-time { text-align: right; }
+        .input-area { padding: 16px 28px 24px; border-top: 1px solid var(--glass-border); }
+        .typing-indicator {
+            height: 20px; font-size: 12px; color: var(--text-secondary);
+            margin-bottom: 8px; overflow: hidden; transition: all 0.3s ease;
+        }
+        .typing-indicator.hidden { height: 0; margin-bottom: 0; opacity: 0; }
+        .input-wrapper { display: flex; gap: 12px; align-items: flex-end; }
+        .input-box { flex: 1; position: relative; }
+        .message-input {
+            width: 100%; padding: 14px 20px; border-radius: 20px;
+            border: 1px solid var(--glass-border);
+            background: rgba(255,255,255,0.05); color: var(--text-primary);
+            font-size: 14px; font-family: inherit; outline: none;
+            resize: none; min-height: 48px; max-height: 120px;
+            transition: all 0.3s ease;
+        }
+        .message-input:focus {
+            border-color: var(--primary); background: rgba(255,255,255,0.08);
+            box-shadow: 0 0 0 3px var(--primary-glow);
+        }
+        .message-input::placeholder { color: var(--text-secondary); }
+        .send-btn {
+            width: 48px; height: 48px; border-radius: 50%; border: none;
+            background: linear-gradient(135deg, var(--primary), #8b5cf6);
+            color: white; cursor: pointer; display: flex;
+            align-items: center; justify-content: center;
+            transition: all 0.3s ease; flex-shrink: 0;
+            box-shadow: 0 4px 15px rgba(96,165,250,0.4);
+        }
+        .send-btn:hover { transform: scale(1.05); box-shadow: 0 6px 20px rgba(96,165,250,0.6); }
+        .send-btn:active { transform: scale(0.95); }
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.6); backdrop-filter: blur(8px);
+            display: flex; align-items: center; justify-content: center;
+            z-index: 1000; opacity: 0; visibility: hidden;
+            transition: all 0.3s ease;
+        }
+        .modal-overlay.active { opacity: 1; visibility: visible; }
+        .modal-content {
+            width: 90%; max-width: 480px; padding: 40px;
+            border-radius: 24px; text-align: center;
+            transform: scale(0.9); transition: transform 0.3s ease;
+        }
+        .modal-overlay.active .modal-content { transform: scale(1); }
+        .modal-logo { font-size: 48px; margin-bottom: 8px; }
+        .modal-title {
+            font-size: 24px; font-weight: 700; margin-bottom: 8px;
+            background: linear-gradient(135deg, #60a5fa, #a78bfa);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .modal-subtitle { color: var(--text-secondary); font-size: 14px; margin-bottom: 28px; }
+        .tab-buttons {
+            display: flex; gap: 8px; margin-bottom: 20px;
+        }
+        .tab-btn {
+            flex: 1; padding: 12px; border-radius: 12px;
+            border: 1px solid var(--glass-border);
+            background: rgba(255,255,255,0.05); color: var(--text-secondary);
+            font-size: 14px; font-weight: 600; cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .tab-btn.active {
+            background: linear-gradient(135deg, var(--primary), #8b5cf6);
+            color: white; border-color: transparent;
+            box-shadow: 0 4px 15px rgba(96,165,250,0.4);
+        }
+        .tab-btn:hover:not(.active) {
+            background: rgba(255,255,255,0.1); color: var(--text-primary);
+        }
+        .tab-panel { display: none; }
+        .tab-panel.active { display: block; }
+        .form-group { margin-bottom: 16px; text-align: left; }
+        .form-label {
+            font-size: 12px; color: var(--text-secondary);
+            margin-bottom: 6px; display: block;
+            text-transform: uppercase; letter-spacing: 1px;
+        }
+        .form-input {
+            width: 100%; padding: 14px 18px; border-radius: 14px;
+            border: 1px solid var(--glass-border);
+            background: rgba(255,255,255,0.05); color: var(--text-primary);
+            font-size: 15px; outline: none; transition: all 0.3s ease;
+        }
+        .form-input:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px var(--primary-glow);
+        }
+        .form-input::placeholder { color: var(--text-secondary); }
+        .room-code-box {
+            padding: 20px; border-radius: 16px;
+            background: rgba(96,165,250,0.1); border: 2px dashed rgba(96,165,250,0.4);
+            margin-bottom: 16px; position: relative;
+        }
+        .room-code-label {
+            font-size: 11px; color: var(--primary); text-transform: uppercase;
+            letter-spacing: 2px; margin-bottom: 8px;
+        }
+        .room-code-value {
+            font-family: 'Courier New', monospace; font-size: 18px;
+            font-weight: 700; color: var(--primary);
+            text-shadow: 0 0 20px var(--primary-glow); letter-spacing: 1px;
+            word-break: break-all;
+        }
+        .room-code-waiting {
+            font-size: 14px; color: var(--text-secondary); margin-top: 8px;
+        }
+        .join-btn {
+            width: 100%; padding: 16px; border-radius: 16px; border: none;
+            background: linear-gradient(135deg, var(--primary), #8b5cf6);
+            color: white; font-size: 16px; font-weight: 600;
+            cursor: pointer; transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(96,165,250,0.4); margin-top: 8px;
+        }
+        .join-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(96,165,250,0.5); }
+        .join-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+        .reconnect-toast {
+            position: fixed; top: 20px; left: 50%;
+            transform: translateX(-50%) translateY(-100px);
+            padding: 12px 24px; border-radius: 12px;
+            font-size: 14px; font-weight: 500; z-index: 1001;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            display: flex; align-items: center; gap: 8px;
+        }
+        .reconnect-toast.show { transform: translateX(-50%) translateY(0); }
+        .reconnect-toast.info { background: rgba(96,165,250,0.2); border: 1px solid rgba(96,165,250,0.3); color: var(--primary); }
+        .reconnect-toast.success { background: rgba(52,211,153,0.2); border: 1px solid rgba(52,211,153,0.3); color: var(--success); }
+        .reconnect-toast.error { background: rgba(248,113,113,0.2); border: 1px solid rgba(248,113,113,0.3); color: var(--error); }
+        .spinner {
+            width: 16px; height: 16px; border: 2px solid currentColor;
+            border-top-color: transparent; border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .empty-state {
+            flex: 1; display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            color: var(--text-secondary); gap: 12px;
+        }
+        .empty-icon { font-size: 48px; opacity: 0.5; }
+        .empty-text { font-size: 14px; }
+        .debug-panel {
+            position: fixed; bottom: 10px; right: 10px;
+            max-width: 400px; max-height: 200px; overflow-y: auto;
+            background: rgba(0,0,0,0.7); border-radius: 8px;
+            padding: 8px 12px; font-size: 11px; font-family: monospace;
+            color: #aaa; z-index: 999; display: none;
+        }
+        .debug-panel.show { display: block; }
+        .debug-line { margin-bottom: 2px; }
+        .debug-line.error { color: #f87171; }
+        .debug-line.warn { color: #fbbf24; }
+        .debug-line.success { color: #34d399; }
+        .debug-line.info { color: #60a5fa; }
+        @media (max-width: 768px) {
+            .app-container { flex-direction: column; padding: 8px; gap: 8px; }
+            .sidebar { width: 100%; flex-direction: row; height: auto; flex-wrap: wrap; }
+            .logo-section, .room-info, .online-panel, .status-panel { flex: 1; min-width: 140px; }
+            .online-panel { max-height: 200px; }
+            .chat-area { min-height: 0; }
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-particles" id="particles"></div>
+    <div class="reconnect-toast info" id="reconnectToast">
+        <div class="spinner" id="toastSpinner"></div>
+        <span id="reconnectText">正在连接...</span>
+    </div>
+    <div class="debug-panel" id="debugPanel"></div>
+
+    <div class="modal-overlay active" id="joinModal">
+        <div class="modal-content liquid-glass-strong">
+            <div class="modal-logo">💬</div>
+            <div class="modal-title">小蓝聊天室 v2.0</div>
+            <div class="modal-subtitle">P2P加密直连 · 终极稳定版</div>
+
+            <div class="tab-buttons">
+                <button class="tab-btn active" id="tabCreate" onclick="switchTab('create')">🏠 创建房间</button>
+                <button class="tab-btn" id="tabJoin" onclick="switchTab('join')">🔑 加入房间</button>
+            </div>
+
+            <div class="tab-panel active" id="panelCreate">
+                <div class="form-group">
+                    <label class="form-label">你的昵称</label>
+                    <input type="text" class="form-input" id="createNickname" placeholder="输入昵称" maxlength="16" autocomplete="off">
+                </div>
+                <div class="room-code-box" id="createRoomBox">
+                    <div class="room-code-label">正在连接服务器...</div>
+                    <div class="room-code-value" id="generatedRoomCode">------</div>
+                    <div class="room-code-waiting">请稍候...</div>
+                </div>
+                <button class="join-btn" id="createBtn" onclick="createRoom()" disabled>🚀 创建房间</button>
+            </div>
+
+            <div class="tab-panel" id="panelJoin">
+                <div class="form-group">
+                    <label class="form-label">房间号（PeerJS ID）</label>
+                    <input type="text" class="form-input" id="joinRoomCode" placeholder="输入对方的房间号" maxlength="50" autocomplete="off">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">你的昵称</label>
+                    <input type="text" class="form-input" id="joinNickname" placeholder="输入昵称" maxlength="16" autocomplete="off">
+                </div>
+                <button class="join-btn" id="joinBtn" onclick="joinRoom()">🔗 加入房间</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="app-container" id="appContainer" style="display:none;">
+        <aside class="sidebar">
+            <div class="logo-section liquid-glass">
+                <div class="logo">💬 小蓝</div>
+                <div class="logo-sub">P2P加密聊天室 v2.0</div>
+            </div>
+            <div class="room-info liquid-glass">
+                <div class="room-label">房间号（PeerJS ID）</div>
+                <div class="room-id-display" id="displayRoomId">------</div>
+                <div class="room-actions">
+                    <button class="room-btn" onclick="copyRoomCode()">📋 复制</button>
+                    <button class="room-btn" onclick="toggleDebug()">🐛 调试</button>
+                    <button class="room-btn" onclick="leaveRoom()">🚪 退出</button>
+                </div>
+            </div>
+            <div class="online-panel liquid-glass">
+                <div class="panel-title">
+                    <div class="online-dot"></div>
+                    房间成员
+                    <span class="online-count" id="onlineCount">0 人</span>
+                </div>
+                <div class="user-list" id="userList"></div>
+            </div>
+            <div class="status-panel liquid-glass">
+                <div class="status-item">
+                    <span>连接方式</span>
+                    <span class="status-value disconnected" id="connMode">未连接</span>
+                </div>
+                <div class="status-item">
+                    <span>网络延迟</span>
+                    <span class="status-value" id="latency">-- ms</span>
+                </div>
+                <div class="status-item">
+                    <span>信令服务器</span>
+                    <span class="status-value" id="signalServer">--</span>
+                </div>
+                <div class="status-item">
+                    <span>P2P节点</span>
+                    <span class="status-value" id="peerCount">0</span>
+                </div>
+                <div class="status-item">
+                    <span>ICE类型</span>
+                    <span class="status-value" id="iceType">--</span>
+                </div>
+            </div>
+        </aside>
+
+        <main class="chat-area liquid-glass">
+            <div class="chat-header">
+                <div class="chat-title">🌐 房间聊天</div>
+                <div class="chat-meta">
+                    <span class="latency-display" id="headerLatency"></span>
+                    <span class="connection-badge disconnected" id="connBadge">
+                        <span id="connDot">●</span>
+                        <span id="connText">未连接</span>
+                    </span>
+                </div>
+            </div>
+            <div class="messages-container" id="messagesContainer">
+                <div class="empty-state" id="emptyState">
+                    <div class="empty-icon">💬</div>
+                    <div class="empty-text">等待好友加入房间...</div>
+                </div>
+            </div>
+            <div class="input-area">
+                <div class="typing-indicator hidden" id="typingIndicator"></div>
+                <div class="input-wrapper">
+                    <div class="input-box">
+                        <textarea class="message-input" id="messageInput" placeholder="输入消息按 Enter 发送..." rows="1" maxlength="2000"></textarea>
+                    </div>
+                    <button class="send-btn" id="sendBtn" onclick="sendMessage()">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="22" y1="2" x2="11" y2="13"></line>
+                            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+
+    // ==================== 终极服务器配置 v2.0 ====================
+    const SERVERS = {
+        peerServers: [
+            { host: '0.peerjs.com', port: 443, path: '/', secure: true, name: 'PeerJS-0', region: 'US' },
+            { host: '1.peerjs.com', port: 443, path: '/', secure: true, name: 'PeerJS-1', region: 'US' },
+            { host: '2.peerjs.com', port: 443, path: '/', secure: true, name: 'PeerJS-2', region: 'US' },
+            { host: 'peerjs-server.herokuapp.com', port: 443, path: '/', secure: true, name: 'Heroku', region: 'US' },
+        ],
+        stunServers: [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' },
+            { urls: 'stun:stun2.l.google.com:19302' },
+            { urls: 'stun:stun3.l.google.com:19302' },
+            { urls: 'stun:stun4.l.google.com:19302' },
+            { urls: 'stun:openrelay.metered.ca:80' },
+        ],
+        turnServers: [
+            { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+            { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+            { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
+        ]
+    };
+
+    const ALL_ICE_SERVERS = [...SERVERS.stunServers, ...SERVERS.turnServers];
+
+    // ==================== 全局状态 v2.0 ====================
+    let peer = null;
+    let myPeerId = '';
+    let nickname = '';
+    let isHost = false;
+    let hostId = '';
+    let connections = new Map();
+    let currentServerIdx = 0;
+    let reconnectAttempts = 0;
+    let pingInterval = null;
+    let healthCheckInterval = null;
+    let typingTimer = null;
+    let typingUsers = new Set();
+    let isInRoom = false;
+    let peerReady = false;
+    let pendingJoin = false;
+    let connectionTimeouts = new Map();
+    let isPageVisible = true;
+    let wasDisconnected = false;
+    let reconnectTimer = null;
+    let isReconnecting = false;
+    let reconnectTimeoutId = null;
+    let messageQueue = [];
+    let debugMode = false;
+    let peerReconnectAttempts = 0;
+    let lastPeerId = null;
+
+    // ==================== DOM ====================
+    function $(id) { return document.getElementById(id); }
+
+    // ==================== 调试日志 ====================
+    function debugLog(msg, type) {
+        type = type || 'info';
+        const time = new Date().toLocaleTimeString();
+        console.log('[' + time + '] ' + msg);
+
+        const panel = $('debugPanel');
+        const line = document.createElement('div');
+        line.className = 'debug-line ' + type;
+        line.textContent = '[' + time + '] ' + msg;
+        panel.appendChild(line);
+
+        while (panel.children.length > 50) {
+            panel.removeChild(panel.firstChild);
+        }
+        panel.scrollTop = panel.scrollHeight;
+    }
+
+    function toggleDebug() {
+        debugMode = !debugMode;
+        $('debugPanel').classList.toggle('show', debugMode);
+        debugLog('调试模式: ' + (debugMode ? '开启' : '关闭'), 'info');
+    }
+
+    // ==================== 工具函数 ====================
+    function generateColor(str) {
+        const colors = ['#60a5fa','#34d399','#fbbf24','#f87171','#a78bfa','#22d3ee','#fb923c','#e879f9','#2dd4bf','#818cf8'];
+        let hash = 0;
+        for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
+        return colors[Math.abs(hash) % colors.length];
+    }
+
+    function formatTime(ts) {
+        const d = new Date(ts);
+        return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+    }
+
+    function escapeHtml(t) {
+        const d = document.createElement('div');
+        d.textContent = t;
+        return d.innerHTML;
+    }
+
+    function showToast(text, type, duration) {
+        const toast = $('reconnectToast');
+        const txt = $('reconnectText');
+        const spinner = $('toastSpinner');
+
+        toast.className = 'reconnect-toast ' + type;
+        txt.textContent = text;
+        spinner.style.display = (type === 'info' || type === 'connecting') ? 'block' : 'none';
+        toast.classList.add('show');
+
+        debugLog('Toast: [' + type + '] ' + text, type === 'error' ? 'error' : 'info');
+
+        if (duration > 0) {
+            setTimeout(function() { toast.classList.remove('show'); }, duration);
+        }
+    }
+
+    function hideToast() {
+        $('reconnectToast').classList.remove('show');
+    }
+
+    function updateStatus(mode, text) {
+        const map = { connected: 'connected', p2p: 'p2p', connecting: 'connecting', disconnected: 'disconnected' };
+        const cls = map[mode] || 'disconnected';
+        $('connMode').className = 'status-value ' + cls;
+        $('connMode').textContent = text;
+        $('connBadge').className = 'connection-badge ' + cls;
+        $('connText').textContent = text;
+        $('signalServer').textContent = (SERVERS.peerServers[currentServerIdx] && SERVERS.peerServers[currentServerIdx].name) || '--';
+        $('peerCount').textContent = connections.size;
+    }
+
+    // ==================== 标签切换 ====================
+    function switchTab(tab) {
+        $('tabCreate').classList.toggle('active', tab === 'create');
+        $('tabJoin').classList.toggle('active', tab === 'join');
+        $('panelCreate').classList.toggle('active', tab === 'create');
+        $('panelJoin').classList.toggle('active', tab === 'join');
+    }
+
+    // ==================== 核心：PeerJS 初始化 v2.0 ====================
+    function initPeer(forceNewId) {
+        forceNewId = forceNewId || false;
+
+        if (isReconnecting) {
+            debugLog('已有重连在进行中，跳过', 'warn');
+            return;
+        }
+
+        const server = SERVERS.peerServers[currentServerIdx];
+        debugLog('初始化PeerJS -> ' + server.name + ' (' + server.host + ')', 'info');
+        updateStatus('connecting', '连接信令中...');
+        showToast('正在连接 ' + server.name + '...', 'info', 0);
+        peerReady = false;
+        isReconnecting = true;
+
+        if (peer) {
+            try {
+                peer.destroy();
+                debugLog('已销毁旧Peer实例', 'info');
+            } catch(e) {
+                debugLog('销毁旧Peer失败: ' + e.message, 'warn');
+            }
+            peer = null;
+        }
+
+        const peerIdToUse = (!forceNewId && lastPeerId) ? lastPeerId : undefined;
+        if (peerIdToUse) {
+            debugLog('尝试使用原ID重连: ' + peerIdToUse, 'info');
+        }
+
+        try {
+            const peerOptions = {
+                host: server.host,
+                port: server.port,
+                path: server.path,
+                secure: server.secure,
+                config: {
+                    iceServers: ALL_ICE_SERVERS,
+                    iceTransportPolicy: 'all',
+                    bundlePolicy: 'max-bundle',
+                    rtcpMuxPolicy: 'require',
+                    iceCandidatePoolSize: 10,
+                },
+                debug: 2,
+                pingInterval: 5000,
+            };
+
+            if (peerIdToUse) {
+                peer = new Peer(peerIdToUse, peerOptions);
+            } else {
+                peer = new Peer(peerOptions);
+            }
+
+            peer.on('open', function(id) {
+                debugLog('信令服务器连接成功，ID: ' + id, 'success');
+                myPeerId = id;
+                lastPeerId = id;
+                peerReady = true;
+                reconnectAttempts = 0;
+                peerReconnectAttempts = 0;
+                wasDisconnected = false;
+                isReconnecting = false;
+                hideToast();
+                updateStatus('connected', '信令已连接');
+
+                $('generatedRoomCode').textContent = myPeerId;
+                $('createRoomBox').innerHTML = '<div class="room-code-label">你的房间号</div><div class="room-code-value">' + myPeerId + '</div><div class="room-code-waiting">把这个房间号发给好友，让他们加入</div>';
+                $('createBtn').disabled = false;
+
+                if (isInRoom) {
+                    handlePostReconnect();
+                }
+
+                if (pendingJoin && hostId) {
+                    pendingJoin = false;
+                    setTimeout(function() { doJoinRoom(); }, 500);
+                }
+            });
+
+            peer.on('connection', function(conn) {
+                debugLog('收到入站连接请求: ' + conn.peer, 'info');
+                handleIncomingConnection(conn);
+            });
+
+            peer.on('error', function(err) {
+                debugLog('PeerJS错误 [' + err.type + ']: ' + err.message, 'error');
+
+                switch(err.type) {
+                    case 'network':
+                    case 'disconnected':
+                    case 'server-error':
+                    case 'socket-error':
+                    case 'socket-closed':
+                        updateStatus('disconnected', '连接失败');
+                        scheduleServerSwitch();
+                        break;
+                    case 'peer-unavailable':
+                        showToast('对方不在线或房间号错误', 'error', 3000);
+                        break;
+                    case 'unavailable-id':
+                        debugLog('ID已被占用，尝试生成新ID', 'warn');
+                        lastPeerId = null;
+                        scheduleServerSwitch(true);
+                        break;
+                    case 'webrtc':
+                        debugLog('WebRTC原生错误，可能是ICE失败', 'error');
+                        break;
+                    default:
+                        if (!peerReady) {
+                            scheduleServerSwitch();
+                        }
+                }
+            });
+
+            peer.on('disconnected', function() {
+                debugLog('与信令服务器断开', 'warn');
+                peerReady = false;
+                wasDisconnected = true;
+                updateStatus('disconnected', '已断开');
+                attemptPeerReconnect();
+            });
+
+            peer.on('close', function() {
+                debugLog('PeerJS已关闭', 'info');
+                peerReady = false;
+                isReconnecting = false;
+                updateStatus('disconnected', '已关闭');
+            });
+
+        } catch (err) {
+            debugLog('PeerJS初始化异常: ' + err.message, 'error');
+            isReconnecting = false;
+            scheduleServerSwitch();
+        }
+    }
+
+    // ==================== 核心：智能重连策略 v2.0 ====================
+    function attemptPeerReconnect() {
+        if (!peer || peer.destroyed) {
+            debugLog('Peer已销毁，无法reconnect()', 'warn');
+            scheduleServerSwitch();
+            return;
+        }
+
+        peerReconnectAttempts++;
+        debugLog('尝试 peer.reconnect() 第' + peerReconnectAttempts + '次...', 'info');
+        showToast('尝试恢复信令连接...', 'info', 0);
+
+        if (reconnectTimeoutId) clearTimeout(reconnectTimeoutId);
+
+        reconnectTimeoutId = setTimeout(function() {
+            if (!peerReady && peer && !peer.destroyed) {
+                debugLog('peer.reconnect() 超时，切换到备用服务器', 'warn');
+                scheduleServerSwitch();
+            }
+        }, 8000);
+
+        try {
+            peer.reconnect();
+        } catch (e) {
+            debugLog('peer.reconnect() 抛出异常: ' + e.message, 'error');
+            scheduleServerSwitch();
+        }
+    }
+
+    function scheduleServerSwitch(forceNewId) {
+        forceNewId = forceNewId || false;
+
+        if (isReconnecting) {
+            debugLog('已有重连在进行中，跳过服务器切换', 'warn');
+            return;
+        }
+
+        if (reconnectTimeoutId) {
+            clearTimeout(reconnectTimeoutId);
+            reconnectTimeoutId = null;
+        }
+
+        if (reconnectAttempts >= SERVERS.peerServers.length * 3) {
+            showToast('所有服务器都连接失败，请刷新页面重试', 'error', 0);
+            isReconnecting = false;
+            return;
+        }
+
+        const oldServer = SERVERS.peerServers[currentServerIdx] && SERVERS.peerServers[currentServerIdx].name;
+        currentServerIdx = (currentServerIdx + 1) % SERVERS.peerServers.length;
+        reconnectAttempts++;
+        const newServer = SERVERS.peerServers[currentServerIdx] && SERVERS.peerServers[currentServerIdx].name;
+
+        const delay = Math.min(2000 * Math.pow(1.5, reconnectAttempts), 15000);
+        debugLog('将在' + Math.round(delay/1000) + '秒后从 ' + (oldServer || '?') + ' 切换到 ' + (newServer || '?'), 'warn');
+        showToast(Math.round(delay/1000) + '秒后切换至 ' + (newServer || '?') + '...', 'error', 0);
+
+        if (reconnectTimer) clearTimeout(reconnectTimer);
+
+        reconnectTimer = setTimeout(function() {
+            isReconnecting = false;
+            initPeer(forceNewId);
+        }, delay);
+    }
+
+    // ==================== 重连后恢复P2P连接 ====================
+    function handlePostReconnect() {
+        debugLog('信令恢复，检查P2P连接状态...', 'info');
+
+        if (isHost) {
+            addSystemMessage('信令已恢复，等待成员重新连接...');
+            broadcast({
+                type: 'host-alive',
+                peerId: myPeerId,
+                timestamp: Date.now()
+            });
+        } else if (hostId) {
+            const hostConn = connections.get(hostId);
+            if (!hostConn || !hostConn.conn || !hostConn.conn.open) {
+                debugLog('房主连接已断开，尝试重新连接...', 'warn');
+                addSystemMessage('正在重新连接房主...');
+                setTimeout(function() {
+                    if (peerReady) {
+                        connectToHost(hostId);
+                    }
+                }, 1000);
+            } else {
+                debugLog('房主P2P连接仍然活跃', 'success');
+                addSystemMessage('P2P连接正常');
+            }
+        }
+    }
+
+    // ==================== 连接管理 v2.0 ====================
+    function handleIncomingConnection(conn) {
+        const peerId = conn.peer;
+        debugLog('处理入站连接: ' + peerId, 'info');
+
+        if (connections.has(peerId)) {
+            const old = connections.get(peerId);
+            debugLog('清理旧连接: ' + peerId, 'warn');
+            try { old.conn.close(); } catch(e) {}
+            connections.delete(peerId);
+        }
+
+        const timeoutId = setTimeout(function() {
+            if (!conn.open) {
+                debugLog('入站连接超时: ' + peerId, 'warn');
+                try { conn.close(); } catch(e) {}
+                connections.delete(peerId);
+            }
+        }, 15000);
+        connectionTimeouts.set(peerId, timeoutId);
+
+        conn.on('open', function() {
+            debugLog('入站连接已打开: ' + peerId, 'success');
+            clearTimeout(connectionTimeouts.get(peerId));
+            connectionTimeouts.delete(peerId);
+
+            connections.set(peerId, {
+                conn: conn,
+                nickname: null,
+                lastPing: Date.now(),
+                latency: null,
+                state: 'connected',
+                iceState: 'unknown',
+                reconnectAttempts: 0
+            });
+
+            updateStatus('p2p', 'P2P直连中');
+
+            safeSend(peerId, {
+                type: 'handshake',
+                nickname: nickname,
+                peerId: myPeerId,
+                timestamp: Date.now()
+            });
+
+            updateUserList();
+        });
+
+        conn.on('data', function(data) {
+            handlePeerData(peerId, data);
+        });
+
+        conn.on('close', function() {
+            debugLog('入站连接关闭: ' + peerId, 'info');
+            clearTimeout(connectionTimeouts.get(peerId));
+            connectionTimeouts.delete(peerId);
+
+            const info = connections.get(peerId);
+            const nick = (info && info.nickname) || '未知用户';
+            connections.delete(peerId);
+            addSystemMessage(nick + ' 离开了房间');
+            updateUserList();
+
+            if (connections.size === 0) {
+                updateStatus('connected', '信令已连接');
+            }
+        });
+
+        conn.on('error', function(err) {
+            debugLog('入站连接错误: ' + peerId + ' - ' + (err.message || err), 'error');
+            clearTimeout(connectionTimeouts.get(peerId));
+            connectionTimeouts.delete(peerId);
+            connections.delete(peerId);
+            updateUserList();
+        });
+    }
+
+    function handleOutgoingConnection(conn, targetId) {
+        debugLog('处理出站连接: ' + targetId, 'info');
+
+        const timeoutId = setTimeout(function() {
+            if (!conn.open) {
+                debugLog('出站连接超时: ' + targetId, 'warn');
+                try { conn.close(); } catch(e) {}
+                connections.delete(targetId);
+                showToast('连接超时，房主可能不在线或网络不通', 'error', 4000);
+            }
+        }, 20000);
+        connectionTimeouts.set(targetId, timeoutId);
+
+        conn.on('open', function() {
+            debugLog('出站连接已打开: ' + targetId, 'success');
+            clearTimeout(connectionTimeouts.get(targetId));
+            connectionTimeouts.delete(targetId);
+
+            connections.set(targetId, {
+                conn: conn,
+                nickname: null,
+                lastPing: Date.now(),
+                latency: null,
+                state: 'connected',
+                iceState: 'unknown',
+                reconnectAttempts: 0
+            });
+
+            updateStatus('p2p', 'P2P直连中');
+            hideToast();
+            showToast('成功加入房间！', 'success', 2000);
+
+            safeSend(targetId, {
+                type: 'handshake',
+                nickname: nickname,
+                peerId: myPeerId,
+                timestamp: Date.now()
+            });
+
+            flushMessageQueue();
+
+            addSystemMessage('已连接到房间');
+            updateUserList();
+        });
+
+        conn.on('data', function(data) {
+            handlePeerData(targetId, data);
+        });
+
+        conn.on('close', function() {
+            debugLog('出站连接关闭: ' + targetId, 'info');
+            clearTimeout(connectionTimeouts.get(targetId));
+            connectionTimeouts.delete(targetId);
+
+            const info = connections.get(targetId);
+            const nick = (info && info.nickname) || '房主';
+            connections.delete(targetId);
+            addSystemMessage(nick + ' 断开了连接');
+            updateUserList();
+            updateStatus('connected', '信令已连接');
+
+            if (isInRoom && !isHost && hostId === targetId) {
+                debugLog('房主断开，安排自动重连...', 'warn');
+                addSystemMessage('房主断开，5秒后尝试重新连接...');
+                setTimeout(function() {
+                    if (peerReady && isInRoom && !isHost) {
+                        connectToHost(hostId);
+                    }
+                }, 5000);
+            }
+        });
+
+        conn.on('error', function(err) {
+            debugLog('出站连接错误: ' + targetId + ' - ' + (err.message || '未知错误'), 'error');
+            clearTimeout(connectionTimeouts.get(targetId));
+            connectionTimeouts.delete(targetId);
+            connections.delete(targetId);
+            updateUserList();
+            showToast('连接错误: ' + (err.message || '未知错误'), 'error', 3000);
+        });
+    }
+
+    function connectToHost(targetId) {
+        if (!peer || !peerReady) {
+            debugLog('PeerJS未就绪，延迟连接', 'warn');
+            pendingJoin = true;
+            return false;
+        }
+        if (!targetId) {
+            showToast('房间号不能为空', 'error', 3000);
+            return false;
+        }
+        if (targetId === myPeerId) {
+            showToast('不能连接到自己的房间', 'error', 3000);
+            return false;
+        }
+        if (connections.has(targetId)) {
+            const info = connections.get(targetId);
+            if (info.conn && info.conn.open) {
+                debugLog('已连接到该房主', 'info');
+                return true;
+            }
+        }
+
+        debugLog('正在连接房主: ' + targetId, 'info');
+        showToast('正在连接房主...', 'info', 0);
+
+        try {
+            const conn = peer.connect(targetId, {
+                reliable: true,
+                serialization: 'json',
+                metadata: { nickname: nickname, roomId: targetId, version: '2.0' }
+            });
+
+            handleOutgoingConnection(conn, targetId);
+            return true;
+        } catch (e) {
+            debugLog('连接房主异常: ' + e.message, 'error');
+            showToast('连接异常: ' + e.message, 'error', 3000);
+            return false;
+        }
+    }
+
+    function safeSend(peerId, data) {
+        const info = connections.get(peerId);
+        if (!info || !info.conn) return false;
+
+        try {
+            if (info.conn.open) {
+                info.conn.send(data);
+                return true;
+            } else {
+                debugLog('连接未打开，无法发送到 ' + peerId, 'warn');
+            }
+        } catch (e) {
+            debugLog('发送失败 ' + peerId + ': ' + e.message, 'error');
+        }
+        return false;
+    }
+
+    function broadcast(data) {
+        let sent = 0;
+        connections.forEach(function(info, peerId) {
+            if (safeSend(peerId, data)) {
+                sent++;
+            }
+        });
+        return sent;
+    }
+
+    // ==================== 消息队列 ====================
+    function queueMessage(data) {
+        messageQueue.push({
+            data: data,
+            timestamp: Date.now(),
+            retries: 0
+        });
+        debugLog('消息已加入队列，当前队列长度: ' + messageQueue.length, 'warn');
+    }
+
+    function flushMessageQueue() {
+        if (messageQueue.length === 0) return;
+        debugLog('尝试发送队列中的 ' + messageQueue.length + ' 条消息...', 'info');
+
+        const now = Date.now();
+        const sent = [];
+
+        messageQueue.forEach(function(item, idx) {
+            if (now - item.timestamp < 30000) {
+                const result = broadcast(item.data);
+                if (result > 0) {
+                    sent.push(idx);
+                }
+            }
+        });
+
+        messageQueue = messageQueue.filter(function(_, idx) { return sent.indexOf(idx) === -1; });
+        debugLog('队列清理完成，剩余: ' + messageQueue.length, 'info');
+    }
+
+    // ==================== 消息处理 v2.0 ====================
+    function handlePeerData(fromPeerId, data) {
+        if (!data || !data.type) {
+            debugLog('收到无效数据 from ' + fromPeerId, 'warn');
+            return;
+        }
+
+        const info = connections.get(fromPeerId);
+        if (info) {
+            info.lastPing = Date.now();
+        }
+
+        switch (data.type) {
+            case 'handshake':
+                debugLog('握手 from: ' + data.nickname, 'success');
+                if (info) {
+                    info.nickname = data.nickname;
+                }
+                addSystemMessage(data.nickname + ' 加入了房间');
+                updateUserList();
+                safeSend(fromPeerId, {
+                    type: 'handshake-ack',
+                    nickname: nickname,
+                    peerId: myPeerId
+                });
+                break;
+
+            case 'handshake-ack':
+                debugLog('握手确认 from: ' + data.nickname, 'success');
+                if (info) {
+                    info.nickname = data.nickname;
+                }
+                updateUserList();
+                break;
+
+            case 'chat':
+                appendMessage({
+                    sender: data.nickname,
+                    content: data.content,
+                    timestamp: data.timestamp,
+                    isSelf: false
+                });
+                break;
+
+            case 'typing':
+                handleTyping(data.nickname, data.isTyping);
+                break;
+
+            case 'ping':
+                safeSend(fromPeerId, {
+                    type: 'pong',
+                    timestamp: data.timestamp
+                });
+                break;
+
+            case 'pong':
+                if (data.timestamp && info) {
+                    const latency = Date.now() - data.timestamp;
+                    info.latency = latency;
+                    updateLatencyDisplay();
+                }
+                break;
+
+            case 'heartbeat':
+                if (info) {
+                    info.lastPing = Date.now();
+                }
+                break;
+
+            case 'host-alive':
+                if (!isHost && hostId === data.peerId) {
+                    debugLog('收到房主存活广播', 'info');
+                    if (!connections.has(hostId)) {
+                        setTimeout(function() { connectToHost(hostId); }, 500);
+                    }
+                }
+                break;
+
+            case 'reconnect-request':
+                debugLog('收到重连请求 from: ' + fromPeerId, 'info');
+                var existingConn = connections.get(fromPeerId);
+                if (!existingConn || !existingConn.conn || !existingConn.conn.open) {
+                    setTimeout(function() {
+                        if (peerReady) {
+                            var newConn = peer.connect(fromPeerId, {
+                                reliable: true,
+                                serialization: 'json',
+                                metadata: { nickname: nickname, roomId: hostId, version: '2.0', reconnect: true }
+                            });
+                            handleOutgoingConnection(newConn, fromPeerId);
+                        }
+                    }, 500);
+                }
+                break;
+        }
+    }
+
+    // ==================== 健康检查 v2.0 ====================
+    function startHealthCheck() {
+        if (pingInterval) clearInterval(pingInterval);
+        if (healthCheckInterval) clearInterval(healthCheckInterval);
+
+        pingInterval = setInterval(function() {
+            if (!isPageVisible) return;
+            const now = Date.now();
+            connections.forEach(function(info, peerId) {
+                if (info.conn && info.conn.open) {
+                    safeSend(peerId, { type: 'ping', timestamp: now });
+                }
+            });
+        }, 5000);
+
+        healthCheckInterval = setInterval(function() {
+            const now = Date.now();
+            let changed = false;
+
+            connections.forEach(function(info, peerId) {
+                if (now - info.lastPing > 30000) {
+                    debugLog('连接超时: ' + peerId + ' (' + Math.round((now-info.lastPing)/1000) + 's未响应)', 'warn');
+                    try { info.conn.close(); } catch(e) {}
+                    connections.delete(peerId);
+                    changed = true;
+                }
+            });
+
+            if (changed) {
+                updateUserList();
+                if (connections.size === 0) {
+                    updateStatus('connected', '信令已连接');
+                }
+            }
+
+            updateLatencyDisplay();
+        }, 3000);
+    }
+
+    function updateLatencyDisplay() {
+        if (connections.size === 0) {
+            $('latency').textContent = '-- ms';
+            $('headerLatency').textContent = '';
+            $('iceType').textContent = '--';
+            return;
+        }
+
+        let total = 0;
+        let count = 0;
+        connections.forEach(function(info) {
+            if (info.latency !== null && info.latency !== undefined) {
+                total += info.latency;
+                count++;
+            }
+        });
+
+        if (count === 0) {
+            $('latency').textContent = '检测中...';
+            $('headerLatency').textContent = '⏳';
+            return;
+        }
+
+        const avg = Math.round(total / count);
+        $('latency').textContent = avg + ' ms';
+        $('headerLatency').textContent = avg < 50 ? '🟢' : avg < 150 ? '🟡' : '🔴';
+
+        const conn = Array.from(connections.values())[0];
+        if (conn && conn.conn && conn.conn.peerConnection) {
+            const pc = conn.conn.peerConnection;
+            const iceState = pc.iceConnectionState;
+            $('iceType').textContent = iceState === 'connected' ? 'P2P直连' : 
+                                      iceState === 'completed' ? 'P2P直连' :
+                                      iceState === 'failed' ? '中继/失败' : iceState;
+        }
+    }
+
+    // ==================== 页面可见性 & 网络状态 v2.0 ====================
+    function handleVisibilityChange() {
+        isPageVisible = !document.hidden;
+        debugLog('页面可见性: ' + (isPageVisible ? '可见' : '隐藏'), 'info');
+
+        if (isPageVisible) {
+            setTimeout(function() {
+                if (!peerReady) {
+                    debugLog('切回前台检测到PeerJS未连接，启动重连', 'warn');
+                    showToast('检测到网络变化，正在恢复...', 'info', 0);
+                    if (reconnectTimer) clearTimeout(reconnectTimer);
+                    reconnectAttempts = 0;
+                    peerReconnectAttempts = 0;
+                    if (peer && !peer.destroyed) {
+                        attemptPeerReconnect();
+                    } else {
+                        initPeer();
+                    }
+                } else if (isInRoom && !isHost && hostId) {
+                    const hostConn = connections.get(hostId);
+                    if (!hostConn || !hostConn.conn || !hostConn.conn.open) {
+                        debugLog('切回前台检测到房主断开，尝试重连', 'warn');
+                        setTimeout(function() {
+                            if (peerReady) connectToHost(hostId);
+                        }, 1000);
+                    }
+                }
+            }, 500);
+        }
+    }
+
+    function handleOnline() {
+        debugLog('网络已恢复', 'success');
+        showToast('网络已恢复', 'success', 2000);
+
+        setTimeout(function() {
+            if (!peerReady) {
+                debugLog('网络恢复但PeerJS未连接，启动重连', 'warn');
+                if (reconnectTimer) clearTimeout(reconnectTimer);
+                reconnectAttempts = 0;
+                peerReconnectAttempts = 0;
+                if (peer && !peer.destroyed) {
+                    attemptPeerReconnect();
+                } else {
+                    initPeer();
+                }
+            }
+        }, 1000);
+    }
+
+    function handleOffline() {
+        debugLog('网络已断开', 'error');
+        showToast('网络已断开，等待恢复...', 'error', 0);
+        wasDisconnected = true;
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    // ==================== UI 渲染 ====================
+    function appendMessage(msg) {
+        $('emptyState').style.display = 'none';
+        const isSelf = msg.isSelf || msg.sender === nickname;
+        const color = generateColor(msg.sender);
+        const initial = (msg.sender && msg.sender.charAt(0).toUpperCase()) || '?';
+
+        const group = document.createElement('div');
+        group.className = 'message-group';
+        group.innerHTML = '<div class="message-row ' + (isSelf ? 'self' : '') + '"><div class="message-avatar" style="background:' + color + '20;color:' + color + ';border:2px solid ' + color + '40;">' + initial + '</div><div class="message-content-wrapper"><div class="message-sender">' + escapeHtml(msg.sender) + '</div><div class="message-bubble ' + (isSelf ? 'self' : 'other') + '">' + escapeHtml(msg.content) + '</div><div class="message-time">' + formatTime(msg.timestamp) + '</div></div></div>';
+        $('messagesContainer').appendChild(group);
+        $('messagesContainer').scrollTop = $('messagesContainer').scrollHeight;
+    }
+
+    function addSystemMessage(content) {
+        $('emptyState').style.display = 'none';
+        const div = document.createElement('div');
+        div.className = 'message-system';
+        div.innerHTML = '<span class="message-system-text">' + escapeHtml(content) + ' · ' + formatTime(Date.now()) + '</span>';
+        $('messagesContainer').appendChild(div);
+        $('messagesContainer').scrollTop = $('messagesContainer').scrollHeight;
+    }
+
+    function updateUserList() {
+        const users = [{ id: myPeerId, nickname: nickname, isSelf: true }];
+        connections.forEach(function(info, peerId) {
+            if (info.nickname) {
+                users.push({ id: peerId, nickname: info.nickname, isSelf: false });
+            }
+        });
+
+        $('onlineCount').textContent = users.length + ' 人';
+        $('userList').innerHTML = '';
+
+        users.forEach(function(user) {
+            const color = generateColor(user.nickname);
+            const initial = user.nickname.charAt(0).toUpperCase();
+
+            const item = document.createElement('div');
+            item.className = 'user-item';
+            item.innerHTML = '<div class="user-avatar" style="background:' + color + '20;color:' + color + ';">' + initial + '</div><span class="user-name">' + escapeHtml(user.nickname) + '</span>' + (user.isSelf ? '<span class="user-you">我</span>' : '');
+            $('userList').appendChild(item);
+        });
+    }
+
+    function handleTyping(sender, isTyping) {
+        if (isTyping) typingUsers.add(sender);
+        else typingUsers.delete(sender);
+
+        const users = Array.from(typingUsers).filter(function(u) { return u !== nickname; });
+        if (users.length === 0) {
+            $('typingIndicator').classList.add('hidden');
+            return;
+        }
+
+        let text = '';
+        if (users.length === 1) text = users[0] + ' 正在输入...';
+        else if (users.length === 2) text = users[0] + ' 和 ' + users[1] + ' 正在输入...';
+        else text = users.length + ' 人正在输入...';
+
+        $('typingIndicator').textContent = text;
+        $('typingIndicator').classList.remove('hidden');
+    }
+
+    // ==================== 消息发送 v2.0 ====================
+    function sendMessage() {
+        const content = $('messageInput').value.trim();
+        if (!content) return;
+
+        appendMessage({ sender: nickname, content: content, timestamp: Date.now(), isSelf: true });
+
+        const msgData = {
+            type: 'chat',
+            nickname: nickname,
+            content: content,
+            timestamp: Date.now()
+        };
+
+        const sent = broadcast(msgData);
+        debugLog('广播消息到 ' + sent + '/' + connections.size + ' 个节点', 'info');
+
+        if (sent === 0 && connections.size > 0) {
+            queueMessage(msgData);
+            showToast('消息发送失败，将在连接恢复后重发', 'error', 3000);
+        }
+
+        $('messageInput').value = '';
+        $('messageInput').style.height = 'auto';
+
+        broadcast({ type: 'typing', nickname: nickname, isTyping: false });
+        if (typingTimer) clearTimeout(typingTimer);
+    }
+
+    $('messageInput').addEventListener('input', function() {
+        this.style.height = 'auto';
+        this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+
+        broadcast({ type: 'typing', nickname: nickname, isTyping: true });
+        if (typingTimer) clearTimeout(typingTimer);
+        typingTimer = setTimeout(function() {
+            broadcast({ type: 'typing', nickname: nickname, isTyping: false });
+        }, 3000);
+    });
+
+    $('messageInput').addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendMessage();
+        }
+    });
+
+    // ==================== 创建/加入房间 v2.0 ====================
+    function createRoom() {
+        nickname = $('createNickname').value.trim();
+        if (!nickname) {
+            $('createNickname').style.borderColor = 'var(--error)';
+            setTimeout(function() { $('createNickname').style.borderColor = ''; }, 1000);
+            return;
+        }
+
+        isHost = true;
+        hostId = myPeerId;
+        isInRoom = true;
+
+        $('joinModal').classList.remove('active');
+        $('appContainer').style.display = 'flex';
+        $('displayRoomId').textContent = myPeerId;
+
+        updateUserList();
+        startHealthCheck();
+        addSystemMessage('房间已创建，等待好友加入...');
+        debugLog('房间创建成功', 'success');
+    }
+
+    function joinRoom() {
+        hostId = $('joinRoomCode').value.trim();
+        nickname = $('joinNickname').value.trim();
+
+        if (!hostId) {
+            $('joinRoomCode').style.borderColor = 'var(--error)';
+            setTimeout(function() { $('joinRoomCode').style.borderColor = ''; }, 1000);
+            return;
+        }
+        if (!nickname) {
+            $('joinNickname').style.borderColor = 'var(--error)';
+            setTimeout(function() { $('joinNickname').style.borderColor = ''; }, 1000);
+            return;
+        }
+
+        isHost = false;
+        isInRoom = true;
+
+        $('joinModal').classList.remove('active');
+        $('appContainer').style.display = 'flex';
+        $('displayRoomId').textContent = hostId;
+
+        updateUserList();
+        startHealthCheck();
+
+        if (peerReady) {
+            connectToHost(hostId);
+        } else {
+            pendingJoin = true;
+            showToast('等待信令服务器连接...', 'info', 0);
+            debugLog('PeerJS未就绪，加入请求挂起', 'warn');
+        }
+    }
+
+    function doJoinRoom() {
+        if (hostId && peerReady) {
+            connectToHost(hostId);
+        }
+    }
+
+    function copyRoomCode() {
+        const code = isHost ? myPeerId : hostId;
+        navigator.clipboard.writeText(code).then(function() {
+            showToast('房间号已复制！', 'success', 2000);
+        }).catch(function() {
+            const ta = document.createElement('textarea');
+            ta.value = code;
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+            showToast('房间号已复制！', 'success', 2000);
+        });
+    }
+
+    function leaveRoom() {
+        if (confirm('确定要退出房间吗？')) {
+            cleanupAll();
+            location.reload();
+        }
+    }
+
+    function cleanupAll() {
+        debugLog('执行完全清理...', 'info');
+
+        if (pingInterval) clearInterval(pingInterval);
+        if (healthCheckInterval) clearInterval(healthCheckInterval);
+        if (reconnectTimer) clearTimeout(reconnectTimer);
+        if (reconnectTimeoutId) clearTimeout(reconnectTimeoutId);
+        if (typingTimer) clearTimeout(typingTimer);
+
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+        window.removeEventListener('online', handleOnline);
+        window.removeEventListener('offline', handleOffline);
+
+        connectionTimeouts.forEach(function(id) { clearTimeout(id); });
+        connectionTimeouts.clear();
+
+        connections.forEach(function(info) {
+            try { info.conn.close(); } catch(e) {}
+        });
+        connections.clear();
+
+        if (peer) {
+            try { peer.destroy(); } catch(e) {}
+        }
+    }
+
+    // ==================== 背景粒子 ====================
+    function createParticles() {
+        const container = $('particles');
+        for (let i = 0; i < 15; i++) {
+            const p = document.createElement('div');
+            p.className = 'particle';
+            const size = Math.random() * 100 + 50;
+            p.style.width = size + 'px';
+            p.style.height = size + 'px';
+            p.style.left = Math.random() * 100 + '%';
+            p.style.top = Math.random() * 100 + '%';
+            p.style.animationDelay = Math.random() * 20 + 's';
+            p.style.animationDuration = (Math.random() * 20 + 15) + 's';
+            container.appendChild(p);
+        }
+    }
+
+    // ==================== 初始化 ====================
+    createParticles();
+    initPeer();
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlRoom = urlParams.get('room');
+    if (urlRoom) {
+        switchTab('join');
+        $('joinRoomCode').value = urlRoom;
+        $('joinNickname').focus();
+    } else {
+        $('createNickname').focus();
+    }
+
+    // 页面卸载时清理
+    window.addEventListener('beforeunload', cleanupAll);
+    </script>
+</body>
+</html>
