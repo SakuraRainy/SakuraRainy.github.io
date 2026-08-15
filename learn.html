@@ -1,0 +1,931 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>拓扑学可视化工具</title>
+<style>
+  :root {
+    --bg: #0c0c0e;
+    --panel: #16161a;
+    --border: #2a2a30;
+    --text: #c8c8d0;
+    --text-dim: #666670;
+    --accent: #e8e8f0;
+    --accent2: #ff6b6b;
+    --accent3: #4ecdc4;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  
+  html, body {
+    width: 100%; height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+    overflow: hidden;
+    touch-action: none;
+  }
+
+  #canvas-container {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 1;
+  }
+
+  canvas { display: block; width: 100%; height: 100%; }
+
+  .header {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 10;
+    padding: 16px 20px;
+    background: linear-gradient(to bottom, rgba(12,12,14,0.95) 0%, rgba(12,12,14,0) 100%);
+    pointer-events: none;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+  }
+
+  .header h1 {
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    color: var(--accent);
+    line-height: 1.3;
+  }
+
+  .header .subtitle {
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-top: 2px;
+  }
+
+  .fps {
+    font-size: 11px;
+    color: var(--text-dim);
+    font-family: 'SF Mono', Monaco, monospace;
+    text-align: right;
+  }
+
+  .controls {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    z-index: 10;
+    background: var(--panel);
+    border-top: 1px solid var(--border);
+    padding: 16px 20px 24px;
+    max-height: 55vh;
+    overflow-y: auto;
+    transition: transform 0.3s ease;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .controls.collapsed {
+    transform: translateY(calc(100% - 48px));
+  }
+
+  .controls-toggle {
+    position: fixed;
+    bottom: 16px; right: 16px;
+    z-index: 11;
+    width: 44px; height: 44px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: var(--bg);
+    border: none;
+    font-size: 20px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+    transition: transform 0.2s, background 0.2s;
+  }
+
+  .controls-toggle:active { transform: scale(0.92); }
+
+  .section-title {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--text-dim);
+    margin-bottom: 12px;
+    font-weight: 600;
+  }
+
+  .shape-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    margin-bottom: 20px;
+  }
+
+  .shape-btn {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 12px 4px;
+    border-radius: 8px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.15s;
+    text-align: center;
+    font-weight: 500;
+  }
+
+  .shape-btn.active {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(232,232,240,0.08);
+  }
+
+  .shape-btn:active { transform: scale(0.96); }
+
+  .param-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+
+  .param-label {
+    font-size: 13px;
+    color: var(--text-dim);
+    min-width: 80px;
+    flex-shrink: 0;
+  }
+
+  .param-value {
+    font-size: 12px;
+    color: var(--accent);
+    min-width: 36px;
+    text-align: right;
+    font-family: 'SF Mono', monospace;
+  }
+
+  input[type="range"] {
+    flex: 1;
+    -webkit-appearance: none;
+    appearance: none;
+    height: 3px;
+    background: var(--border);
+    border-radius: 2px;
+    outline: none;
+  }
+
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+    border: 2px solid var(--bg);
+    box-shadow: 0 0 0 1px var(--border);
+  }
+
+  .toggle-row {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+  }
+
+  .toggle-btn {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .toggle-btn.on {
+    border-color: var(--accent3);
+    color: var(--accent3);
+    background: rgba(78,205,196,0.08);
+  }
+
+  .info-panel {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+    margin-top: 8px;
+  }
+
+  .info-panel h3 {
+    font-size: 14px;
+    color: var(--accent);
+    margin-bottom: 6px;
+    font-weight: 600;
+  }
+
+  .info-panel p {
+    font-size: 13px;
+    color: var(--text-dim);
+    line-height: 1.6;
+  }
+
+  .gesture-hint {
+    position: fixed;
+    bottom: 70px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 5;
+    background: rgba(22,22,26,0.9);
+    border: 1px solid var(--border);
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 12px;
+    color: var(--text-dim);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.5s;
+  }
+
+  .gesture-hint.show { opacity: 1; }
+
+  @media (min-width: 768px) {
+    .controls {
+      left: auto;
+      right: 20px;
+      bottom: 20px;
+      width: 320px;
+      max-height: 80vh;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      padding: 20px;
+    }
+    .controls.collapsed { transform: translateX(calc(100% + 30px)); }
+    .controls-toggle { right: 20px; bottom: 20px; }
+    .shape-grid { grid-template-columns: repeat(2, 1fr); }
+    .header { padding: 24px 28px; }
+    .header h1 { font-size: 22px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <h1>拓扑学可视化</h1>
+    <div class="subtitle">Topological Visualization</div>
+  </div>
+  <div class="fps" id="fps">60 FPS</div>
+</div>
+
+<div id="canvas-container"></div>
+
+<div class="gesture-hint" id="gestureHint">单指旋转 · 双指缩放</div>
+
+<button class="controls-toggle" id="toggleBtn" onclick="toggleControls()">⚙</button>
+
+<div class="controls" id="controls">
+  <div class="section-title">拓扑对象</div>
+  <div class="shape-grid">
+    <button class="shape-btn active" onclick="setShape('mobius', this)">莫比乌斯带</button>
+    <button class="shape-btn" onclick="setShape('klein', this)">克莱因瓶</button>
+    <button class="shape-btn" onclick="setShape('torus', this)">环面</button>
+    <button class="shape-btn" onclick="setShape('sphere', this)">球面</button>
+    <button class="shape-btn" onclick="setShape('trefoil', this)">三叶结</button>
+    <button class="shape-btn" onclick="setShape('boy', this)">博伊曲面</button>
+    <button class="shape-btn" onclick="setShape('helicoid', this)">螺旋面</button>
+    <button class="shape-btn" onclick="setShape('catenoid', this)">悬链面</button>
+  </div>
+
+  <div class="section-title">显示选项</div>
+  <div class="toggle-row">
+    <button class="toggle-btn on" id="btnWire" onclick="toggleWireframe()">线框</button>
+    <button class="toggle-btn" id="btnSolid" onclick="toggleSolid()">实体</button>
+    <button class="toggle-btn on" id="btnRotate" onclick="toggleAutoRotate()">自转</button>
+    <button class="toggle-btn" id="btnNormals" onclick="toggleNormals()">法线</button>
+  </div>
+
+  <div class="section-title">参数调节</div>
+  <div class="param-row">
+    <span class="param-label">细分度</span>
+    <input type="range" id="segSlider" min="20" max="200" value="80" oninput="updateParams()">
+    <span class="param-value" id="segVal">80</span>
+  </div>
+  <div class="param-row">
+    <span class="param-label">旋转速度</span>
+    <input type="range" id="speedSlider" min="0" max="100" value="30" oninput="updateParams()">
+    <span class="param-value" id="speedVal">0.3</span>
+  </div>
+  <div class="param-row">
+    <span class="param-label">缩放</span>
+    <input type="range" id="scaleSlider" min="50" max="150" value="100" oninput="updateParams()">
+    <span class="param-value" id="scaleVal">1.0</span>
+  </div>
+
+  <div class="section-title">关于</div>
+  <div class="info-panel" id="infoPanel">
+    <h3>莫比乌斯带 (Möbius Strip)</h3>
+    <p>将一条纸带扭转半圈后首尾相接形成的单侧曲面。它只有一个面、一条边界，是拓扑学中最经典的不可定向曲面。</p>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+let scene, camera, renderer, mesh, wireframeMesh, normalsHelper;
+let currentShape = 'mobius';
+let autoRotate = true;
+let showWireframe = true;
+let showSolid = false;
+let showNormals = false;
+let segments = 80;
+let rotateSpeed = 0.003;
+let scaleFactor = 1.0;
+let frameCount = 0;
+let lastTime = performance.now();
+
+let isDragging = false;
+let previousTouch = null;
+let previousPinchDist = 0;
+let rotX = 0.3, rotY = 0;
+let cameraDist = 5;
+
+function init() {
+  const container = document.getElementById('canvas-container');
+  
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x0c0c0e);
+  scene.fog = new THREE.Fog(0x0c0c0e, 8, 20);
+
+  camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 100);
+  camera.position.set(0, 0, cameraDist);
+
+  renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.shadowMap.enabled = true;
+  container.appendChild(renderer.domElement);
+
+  const ambient = new THREE.AmbientLight(0xffffff, 0.4);
+  scene.add(ambient);
+
+  const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+  dirLight.position.set(5, 5, 5);
+  scene.add(dirLight);
+
+  const dirLight2 = new THREE.DirectionalLight(0x4ecdc4, 0.3);
+  dirLight2.position.set(-5, -3, -5);
+  scene.add(dirLight2);
+
+  const gridHelper = new THREE.GridHelper(10, 20, 0x2a2a30, 0x1a1a20);
+  gridHelper.position.y = -2.5;
+  scene.add(gridHelper);
+
+  generateShape();
+
+  window.addEventListener('resize', onResize);
+  setupTouchEvents();
+  
+  setTimeout(() => {
+    document.getElementById('gestureHint').classList.add('show');
+    setTimeout(() => document.getElementById('gestureHint').classList.remove('show'), 4000);
+  }, 800);
+
+  animate();
+}
+
+function generateShape() {
+  if (mesh) {
+    scene.remove(mesh);
+    if (mesh.geometry) mesh.geometry.dispose();
+    if (mesh.material) mesh.material.dispose();
+  }
+  if (wireframeMesh) {
+    scene.remove(wireframeMesh);
+    if (wireframeMesh.geometry) wireframeMesh.geometry.dispose();
+    if (wireframeMesh.material) wireframeMesh.material.dispose();
+  }
+  if (normalsHelper) {
+    scene.remove(normalsHelper);
+    normalsHelper = null;
+  }
+
+  const geo = createGeometry(currentShape, segments);
+  
+  const material = new THREE.MeshStandardMaterial({
+    color: 0xe8e8f0,
+    roughness: 0.3,
+    metalness: 0.1,
+    side: THREE.DoubleSide,
+    transparent: true,
+    opacity: 0.9,
+    flatShading: false
+  });
+
+  const wireMaterial = new THREE.LineBasicMaterial({
+    color: 0xff6b6b,
+    transparent: true,
+    opacity: 0.6
+  });
+
+  mesh = new THREE.Mesh(geo, material);
+  mesh.scale.setScalar(scaleFactor);
+  mesh.visible = showSolid;
+  scene.add(mesh);
+
+  const wireGeo = new THREE.WireframeGeometry(geo);
+  wireframeMesh = new THREE.LineSegments(wireGeo, wireMaterial);
+  wireframeMesh.scale.setScalar(scaleFactor);
+  wireframeMesh.visible = showWireframe;
+  scene.add(wireframeMesh);
+
+  if (showNormals) {
+    normalsHelper = new THREE.VertexNormalsHelper(mesh, 0.15, 0x4ecdc4, 1);
+    scene.add(normalsHelper);
+  }
+
+  updateInfo();
+}
+
+function createGeometry(type, seg) {
+  const s = Math.max(20, Math.min(200, seg));
+  
+  switch(type) {
+    case 'mobius': return createMobius(s);
+    case 'klein': return createKlein(s);
+    case 'torus': return createTorus(s);
+    case 'sphere': return createSphere(s);
+    case 'trefoil': return createTrefoil(s);
+    case 'boy': return createBoy(s);
+    case 'helicoid': return createHelicoid(s);
+    case 'catenoid': return createCatenoid(s);
+    default: return createMobius(s);
+  }
+}
+
+function createMobius(seg) {
+  const geo = new THREE.BufferGeometry();
+  const uSteps = seg, vSteps = Math.floor(seg / 4);
+  const verts = [], indices = [];
+  
+  for (let i = 0; i <= uSteps; i++) {
+    for (let j = 0; j <= vSteps; j++) {
+      const u = (i / uSteps) * Math.PI * 2;
+      const v = (j / vSteps) * 2 - 1;
+      const cosu = Math.cos(u), sinu = Math.sin(u);
+      
+      const x = (1 + v * 0.5 * cosu) * cosu;
+      const y = (1 + v * 0.5 * cosu) * sinu;
+      const z = v * 0.5 * sinu;
+      
+      verts.push(x, y, z);
+    }
+  }
+  
+  for (let i = 0; i < uSteps; i++) {
+    for (let j = 0; j < vSteps; j++) {
+      const a = i * (vSteps + 1) + j;
+      const b = a + vSteps + 1;
+      indices.push(a, b, a + 1);
+      indices.push(b, b + 1, a + 1);
+    }
+  }
+  
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+  geo.setIndex(indices);
+  geo.computeVertexNormals();
+  return geo;
+}
+
+function createKlein(seg) {
+  const geo = new THREE.BufferGeometry();
+  const uSteps = seg, vSteps = Math.floor(seg / 3);
+  const verts = [], indices = [];
+  
+  for (let i = 0; i <= uSteps; i++) {
+    for (let j = 0; j <= vSteps; j++) {
+      const u = (i / uSteps) * Math.PI * 2;
+      const v = (j / vSteps) * Math.PI * 2;
+      
+      let x, y, z;
+      if (u < Math.PI) {
+        x = 3 * Math.cos(u) * (1 + Math.sin(u)) + (2 * (1 - Math.cos(u) / 2)) * Math.cos(u) * Math.cos(v);
+        z = -8 * Math.sin(u) - 2 * (1 - Math.cos(u) / 2) * Math.sin(u) * Math.cos(v);
+      } else {
+        x = 3 * Math.cos(u) * (1 + Math.sin(u)) + (2 * (1 - Math.cos(u) / 2)) * Math.cos(v + Math.PI);
+        z = -8 * Math.sin(u);
+      }
+      y = -2 * (1 - Math.cos(u) / 2) * Math.sin(v);
+      
+      verts.push(x / 4, y / 4, z / 4);
+    }
+  }
+  
+  for (let i = 0; i < uSteps; i++) {
+    for (let j = 0; j < vSteps; j++) {
+      const a = i * (vSteps + 1) + j;
+      const b = a + vSteps + 1;
+      indices.push(a, b, a + 1);
+      indices.push(b, b + 1, a + 1);
+    }
+  }
+  
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+  geo.setIndex(indices);
+  geo.computeVertexNormals();
+  return geo;
+}
+
+function createTorus(seg) {
+  const geo = new THREE.BufferGeometry();
+  const R = 1.5, r = 0.6;
+  const uSteps = seg, vSteps = Math.floor(seg / 2);
+  const verts = [], indices = [];
+  
+  for (let i = 0; i <= uSteps; i++) {
+    for (let j = 0; j <= vSteps; j++) {
+      const u = (i / uSteps) * Math.PI * 2;
+      const v = (j / vSteps) * Math.PI * 2;
+      
+      const x = (R + r * Math.cos(v)) * Math.cos(u);
+      const y = (R + r * Math.cos(v)) * Math.sin(u);
+      const z = r * Math.sin(v);
+      
+      verts.push(x, y, z);
+    }
+  }
+  
+  for (let i = 0; i < uSteps; i++) {
+    for (let j = 0; j < vSteps; j++) {
+      const a = i * (vSteps + 1) + j;
+      const b = a + vSteps + 1;
+      indices.push(a, b, a + 1);
+      indices.push(b, b + 1, a + 1);
+    }
+  }
+  
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+  geo.setIndex(indices);
+  geo.computeVertexNormals();
+  return geo;
+}
+
+function createSphere(seg) {
+  const geo = new THREE.BufferGeometry();
+  const r = 1.8;
+  const uSteps = seg, vSteps = Math.floor(seg / 2);
+  const verts = [], indices = [];
+  
+  for (let i = 0; i <= uSteps; i++) {
+    for (let j = 0; j <= vSteps; j++) {
+      const u = (i / uSteps) * Math.PI * 2;
+      const v = (j / vSteps) * Math.PI;
+      
+      const x = r * Math.sin(v) * Math.cos(u);
+      const y = r * Math.cos(v);
+      const z = r * Math.sin(v) * Math.sin(u);
+      
+      verts.push(x, y, z);
+    }
+  }
+  
+  for (let i = 0; i < uSteps; i++) {
+    for (let j = 0; j < vSteps; j++) {
+      const a = i * (vSteps + 1) + j;
+      const b = a + vSteps + 1;
+      indices.push(a, b, a + 1);
+      indices.push(b, b + 1, a + 1);
+    }
+  }
+  
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+  geo.setIndex(indices);
+  geo.computeVertexNormals();
+  return geo;
+}
+
+function createTrefoil(seg) {
+  const geo = new THREE.BufferGeometry();
+  const uSteps = seg, vSteps = Math.floor(seg / 4);
+  const verts = [], indices = [];
+  const tubeR = 0.25;
+  
+  for (let i = 0; i <= uSteps; i++) {
+    for (let j = 0; j <= vSteps; j++) {
+      const t = (i / uSteps) * Math.PI * 2;
+      const s = (j / vSteps) * Math.PI * 2;
+      
+      const x0 = Math.sin(t) + 2 * Math.sin(2 * t);
+      const y0 = Math.cos(t) - 2 * Math.cos(2 * t);
+      const z0 = -Math.sin(3 * t);
+      
+      const dx = Math.cos(t) + 4 * Math.cos(2 * t);
+      const dy = -Math.sin(t) + 4 * Math.sin(2 * t);
+      const dz = -3 * Math.cos(3 * t);
+      
+      const len = Math.sqrt(dx*dx + dy*dy + dz*dz);
+      const tx = dx/len, ty = dy/len, tz = dz/len;
+      
+      let nx = -ty, ny = tx, nz = 0;
+      const nlen = Math.sqrt(nx*nx + ny*ny + nz*nz);
+      if (nlen > 0.001) { nx /= nlen; ny /= nlen; }
+      
+      const bx = ty * nz - tz * ny;
+      const by = tz * nx - tx * nz;
+      const bz = tx * ny - ty * nx;
+      
+      const x = x0 * 0.4 + tubeR * (Math.cos(s) * nx + Math.sin(s) * bx);
+      const y = y0 * 0.4 + tubeR * (Math.cos(s) * ny + Math.sin(s) * by);
+      const z = z0 * 0.4 + tubeR * (Math.cos(s) * nz + Math.sin(s) * bz);
+      
+      verts.push(x, y, z);
+    }
+  }
+  
+  for (let i = 0; i < uSteps; i++) {
+    for (let j = 0; j < vSteps; j++) {
+      const a = i * (vSteps + 1) + j;
+      const b = a + vSteps + 1;
+      indices.push(a, b, a + 1);
+      indices.push(b, b + 1, a + 1);
+    }
+  }
+  
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+  geo.setIndex(indices);
+  geo.computeVertexNormals();
+  return geo;
+}
+
+function createBoy(seg) {
+  const geo = new THREE.BufferGeometry();
+  const n = seg;
+  const verts = [], indices = [];
+  
+  for (let i = 0; i <= n; i++) {
+    for (let j = 0; j <= n; j++) {
+      const u = (i / n) * Math.PI;
+      const v = (j / n) * Math.PI;
+      
+      const x = (2/3) * (Math.cos(u) * Math.cos(2*v) + Math.sqrt(2) * Math.sin(u) * Math.cos(v)) * Math.cos(u) / (Math.sqrt(2) - Math.sin(2*u) * Math.sin(3*v));
+      const y = (2/3) * (Math.cos(u) * Math.sin(2*v) - Math.sqrt(2) * Math.sin(u) * Math.sin(v)) * Math.cos(u) / (Math.sqrt(2) - Math.sin(2*u) * Math.sin(3*v));
+      const z = Math.sqrt(2) * Math.cos(u) * Math.cos(u) / (Math.sqrt(2) - Math.sin(2*u) * Math.sin(3*v));
+      
+      verts.push(x, y, z - 0.5);
+    }
+  }
+  
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j < n; j++) {
+      const a = i * (n + 1) + j;
+      const b = a + n + 1;
+      indices.push(a, b, a + 1);
+      indices.push(b, b + 1, a + 1);
+    }
+  }
+  
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+  geo.setIndex(indices);
+  geo.computeVertexNormals();
+  return geo;
+}
+
+function createHelicoid(seg) {
+  const geo = new THREE.BufferGeometry();
+  const uSteps = seg, vSteps = Math.floor(seg / 3);
+  const verts = [], indices = [];
+  
+  for (let i = 0; i <= uSteps; i++) {
+    for (let j = 0; j <= vSteps; j++) {
+      const u = (i / uSteps) * Math.PI * 4 - Math.PI * 2;
+      const v = (j / vSteps) * 2 - 1;
+      
+      const x = v * Math.cos(u);
+      const y = v * Math.sin(u);
+      const z = u * 0.3;
+      
+      verts.push(x, y, z);
+    }
+  }
+  
+  for (let i = 0; i < uSteps; i++) {
+    for (let j = 0; j < vSteps; j++) {
+      const a = i * (vSteps + 1) + j;
+      const b = a + vSteps + 1;
+      indices.push(a, b, a + 1);
+      indices.push(b, b + 1, a + 1);
+    }
+  }
+  
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+  geo.setIndex(indices);
+  geo.computeVertexNormals();
+  return geo;
+}
+
+function createCatenoid(seg) {
+  const geo = new THREE.BufferGeometry();
+  const uSteps = seg, vSteps = Math.floor(seg / 2);
+  const verts = [], indices = [];
+  const c = 1;
+  
+  for (let i = 0; i <= uSteps; i++) {
+    for (let j = 0; j <= vSteps; j++) {
+      const u = (i / uSteps) * Math.PI * 2;
+      const v = (j / vSteps) * 2 - 1;
+      
+      const x = c * Math.cosh(v) * Math.cos(u);
+      const y = c * Math.cosh(v) * Math.sin(u);
+      const z = v;
+      
+      verts.push(x * 0.6, y * 0.6, z);
+    }
+  }
+  
+  for (let i = 0; i < uSteps; i++) {
+    for (let j = 0; j < vSteps; j++) {
+      const a = i * (vSteps + 1) + j;
+      const b = a + vSteps + 1;
+      indices.push(a, b, a + 1);
+      indices.push(b, b + 1, a + 1);
+    }
+  }
+  
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+  geo.setIndex(indices);
+  geo.computeVertexNormals();
+  return geo;
+}
+
+const shapeInfo = {
+  mobius: { title: '莫比乌斯带 (Möbius Strip)', desc: '将一条纸带扭转半圈后首尾相接形成的单侧曲面。它只有一个面、一条边界，是拓扑学中最经典的不可定向曲面。蚂蚁可以不跨越边缘爬遍整个表面。' },
+  klein: { title: '克莱因瓶 (Klein Bottle)', desc: '一个没有内外之分的不可定向闭曲面。在三维空间中无法无自交地实现，需要四维空间才能完整嵌入。它没有边界，也没有"内部"和"外部"的区别。' },
+  torus: { title: '环面 (Torus)', desc: '一个可定向的闭曲面，拓扑等价于甜甜圈的表面。亏格为1，欧拉示性数为0。它是乘积空间 S¹ × S¹ 的标准例子。' },
+  sphere: { title: '球面 (Sphere)', desc: '最简单的闭曲面，拓扑等价于二维球 S²。它是单连通的，欧拉示性数为2。球面与环面不同胚，因为球面没有"洞"。' },
+  trefoil: { title: '三叶结 (Trefoil Knot)', desc: '最简单的非平凡纽结，交叉数最小为3。它是手性的，存在左手和右手两种版本。三叶结无法在不剪断的情况下解开为平凡结。' },
+  boy: { title: '博伊曲面 (Boy\'s Surface)', desc: '实射影平面在三维空间中的一个浸入，没有奇点（但有自交）。它是不可定向曲面的一个著名例子，由 Werner Boy 于1901年发现。' },
+  helicoid: { title: '螺旋面 (Helicoid)', desc: '一个极小曲面，由一条直线绕固定轴以恒定角速度旋转同时沿轴方向匀速平移生成。它是除平面外第一个被发现的极小曲面。' },
+  catenoid: { title: '悬链面 (Catenoid)', desc: '由悬链线绕其准线旋转形成的极小曲面。它是旋转极小曲面的唯一非平面例子，与螺旋面共形等价。' }
+};
+
+function updateInfo() {
+  const info = shapeInfo[currentShape] || shapeInfo.mobius;
+  const panel = document.getElementById('infoPanel');
+  if (!panel) return;
+  panel.innerHTML = '<h3>' + info.title + '</h3><p>' + info.desc + '</p>';
+}
+
+function setShape(name, btn) {
+  currentShape = name;
+  document.querySelectorAll('.shape-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  generateShape();
+}
+
+function toggleWireframe() {
+  showWireframe = !showWireframe;
+  document.getElementById('btnWire').classList.toggle('on', showWireframe);
+  if (wireframeMesh) wireframeMesh.visible = showWireframe;
+}
+
+function toggleSolid() {
+  showSolid = !showSolid;
+  document.getElementById('btnSolid').classList.toggle('on', showSolid);
+  if (mesh) mesh.visible = showSolid;
+}
+
+function toggleAutoRotate() {
+  autoRotate = !autoRotate;
+  document.getElementById('btnRotate').classList.toggle('on', autoRotate);
+}
+
+function toggleNormals() {
+  showNormals = !showNormals;
+  document.getElementById('btnNormals').classList.toggle('on', showNormals);
+  generateShape();
+}
+
+function updateParams() {
+  segments = parseInt(document.getElementById('segSlider').value);
+  rotateSpeed = parseInt(document.getElementById('speedSlider').value) / 10000;
+  scaleFactor = parseInt(document.getElementById('scaleSlider').value) / 100;
+  
+  document.getElementById('segVal').textContent = segments;
+  document.getElementById('speedVal').textContent = (rotateSpeed * 1000).toFixed(1);
+  document.getElementById('scaleVal').textContent = scaleFactor.toFixed(1);
+  
+  if (mesh) {
+    mesh.scale.setScalar(scaleFactor);
+    wireframeMesh.scale.setScalar(scaleFactor);
+  }
+  
+  clearTimeout(window._geoTimeout);
+  window._geoTimeout = setTimeout(generateShape, 150);
+}
+
+let controlsCollapsed = false;
+function toggleControls() {
+  controlsCollapsed = !controlsCollapsed;
+  document.getElementById('controls').classList.toggle('collapsed', controlsCollapsed);
+  document.getElementById('toggleBtn').textContent = controlsCollapsed ? '⚙' : '✕';
+}
+
+function setupTouchEvents() {
+  const el = renderer.domElement;
+  
+  el.addEventListener('mousedown', e => {
+    isDragging = true;
+    previousTouch = { x: e.clientX, y: e.clientY };
+  });
+  
+  el.addEventListener('mousemove', e => {
+    if (!isDragging) return;
+    const dx = e.clientX - previousTouch.x;
+    const dy = e.clientY - previousTouch.y;
+    rotY -= dx * 0.01;
+    rotX += dy * 0.01;
+    rotX = Math.max(-Math.PI/2, Math.min(Math.PI/2, rotX));
+    previousTouch = { x: e.clientX, y: e.clientY };
+  });
+  
+  el.addEventListener('mouseup', () => isDragging = false);
+  
+  el.addEventListener('wheel', e => {
+    cameraDist += e.deltaY * 0.01;
+    cameraDist = Math.max(2, Math.min(15, cameraDist));
+  }, { passive: true });
+
+  el.addEventListener('touchstart', e => {
+    if (e.touches.length === 1) {
+      isDragging = true;
+      previousTouch = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    } else if (e.touches.length === 2) {
+      isDragging = false;
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      previousPinchDist = Math.sqrt(dx*dx + dy*dy);
+    }
+  }, { passive: true });
+
+  el.addEventListener('touchmove', e => {
+    e.preventDefault();
+    if (e.touches.length === 1 && isDragging) {
+      const dx = e.touches[0].clientX - previousTouch.x;
+      const dy = e.touches[0].clientY - previousTouch.y;
+      rotY -= dx * 0.015;
+      rotX += dy * 0.015;
+      rotX = Math.max(-Math.PI/2, Math.min(Math.PI/2, rotX));
+      previousTouch = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    } else if (e.touches.length === 2) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      const dist = Math.sqrt(dx*dx + dy*dy);
+      if (previousPinchDist > 0) {
+        cameraDist *= previousPinchDist / dist;
+        cameraDist = Math.max(2, Math.min(15, cameraDist));
+      }
+      previousPinchDist = dist;
+    }
+  }, { passive: false });
+
+  el.addEventListener('touchend', () => {
+    isDragging = false;
+    previousPinchDist = 0;
+  });
+}
+
+function onResize() {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+}
+
+function animate() {
+  requestAnimationFrame(animate);
+  
+  const now = performance.now();
+  frameCount++;
+  if (now - lastTime >= 1000) {
+    document.getElementById('fps').textContent = frameCount + ' FPS';
+    frameCount = 0;
+    lastTime = now;
+  }
+
+  if (autoRotate && !isDragging) {
+    rotY += rotateSpeed * 10;
+  }
+
+  const cx = cameraDist * Math.sin(rotY) * Math.cos(rotX);
+  const cy = cameraDist * Math.sin(rotX);
+  const cz = cameraDist * Math.cos(rotY) * Math.cos(rotX);
+  camera.position.set(cx, cy, cz);
+  camera.lookAt(0, 0, 0);
+
+  if (normalsHelper) normalsHelper.update();
+
+  renderer.render(scene, camera);
+}
+
+init();
+</script>
+</body>
+</html>
