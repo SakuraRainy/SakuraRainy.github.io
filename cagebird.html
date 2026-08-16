@@ -1,0 +1,1255 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>笼中鸟</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        :root {
+            --bg: #0a0a0f;
+            --panel: rgba(18, 20, 28, 0.78);
+            --panel-border: rgba(255,255,255,0.08);
+            --fg: #f5f5f7;
+            --muted: #9ca3af;
+            --accent: #ff7a45;
+        }
+        * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+        html, body {
+            width: 100%; height: 100%;
+            overflow: hidden;
+            background: var(--bg);
+            color: var(--fg);
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC", "Microsoft YaHei", sans-serif;
+            -webkit-font-smoothing: antialiased;
+            user-select: none;
+            touch-action: none;
+        }
+        #scene {
+            position: fixed; inset: 0;
+            width: 100%; height: 100%;
+            display: block;
+        }
+        .top-bar {
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            padding: 14px 18px;
+            padding-top: max(14px, env(safe-area-inset-top));
+            z-index: 10;
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            pointer-events: none;
+        }
+        .title-block { pointer-events: auto; }
+        .title {
+            font-size: 17px;
+            font-weight: 800;
+            letter-spacing: 1px;
+            color: var(--fg);
+            text-shadow: 0 1px 10px rgba(0,0,0,0.6);
+        }
+        .subtitle {
+            font-size: 10px;
+            color: rgba(255,255,255,0.65);
+            margin-top: 3px;
+            letter-spacing: 1.4px;
+            text-shadow: 0 1px 4px rgba(0,0,0,0.6);
+        }
+        .progress-display {
+            pointer-events: auto;
+            background: var(--panel);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--panel-border);
+            border-radius: 14px;
+            padding: 8px 14px;
+            text-align: right;
+            min-width: 88px;
+        }
+        .progress-display .count {
+            font-size: 22px;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+            letter-spacing: 1px;
+            line-height: 1.1;
+        }
+        .progress-display .label {
+            font-size: 9px;
+            color: var(--muted);
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            margin-top: 2px;
+        }
+        .fps {
+            position: fixed;
+            top: 78px;
+            right: 14px;
+            font-size: 10px;
+            color: rgba(255,255,255,0.55);
+            font-variant-numeric: tabular-nums;
+            background: var(--panel);
+            padding: 4px 9px;
+            border-radius: 8px;
+            border: 1px solid var(--panel-border);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            z-index: 9;
+            letter-spacing: 0.5px;
+        }
+        /* 摇杆 */
+        #joystick {
+            position: fixed;
+            left: 0; bottom: 0;
+            width: 160px; height: 160px;
+            z-index: 50;
+            pointer-events: none;
+            display: none;
+        }
+        .joystick-base {
+            position: absolute;
+            left: 50%; top: 50%;
+            width: 120px; height: 120px;
+            margin-left: -60px; margin-top: -60px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.12);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+        }
+        .joystick-thumb {
+            position: absolute;
+            left: 50%; top: 50%;
+            width: 44px; height: 44px;
+            margin-left: -22px; margin-top: -22px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.3);
+            border: 1px solid rgba(255,255,255,0.25);
+            box-shadow: 0 2px 12px rgba(0,0,0,0.3);
+            transition: none;
+        }
+        /* 对话框 */
+        #dialogBox {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 90%;
+            max-width: 600px;
+            background: var(--panel);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--panel-border);
+            border-radius: 14px;
+            padding: 20px;
+            color: #fff;
+            font-size: 15px;
+            line-height: 1.8;
+            z-index: 100;
+            cursor: pointer;
+            transition: opacity 0.5s, transform 0.5s;
+            display: none;
+        }
+        #dialogBox.show {
+            display: block;
+            animation: dialogIn 0.5s ease;
+        }
+        @keyframes dialogIn {
+            from { opacity: 0; transform: translateX(-50%) translateY(20px); }
+            to { opacity: 1; transform: translateX(-50%) translateY(0); }
+        }
+        #dialogBox .hint {
+            text-align: center;
+            font-size: 11px;
+            color: rgba(255,255,255,0.45);
+            margin-top: 10px;
+            letter-spacing: 1px;
+        }
+        /* 结算画面 */
+        #endingScreen {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.92);
+            z-index: 200;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+            text-align: center;
+        }
+        #endingScreen.show {
+            display: flex;
+            animation: fadeIn 2s ease;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        #endingScreen h1 {
+            color: #e8e8e8;
+            font-size: 28px;
+            margin-bottom: 30px;
+            letter-spacing: 8px;
+        }
+        #endingScreen .poem {
+            color: #b0b0b0;
+            font-size: 16px;
+            line-height: 2.4;
+            max-width: 500px;
+            margin-bottom: 30px;
+        }
+        #endingScreen .thought {
+            color: #888;
+            font-size: 14px;
+            line-height: 2;
+            max-width: 480px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+            padding-top: 20px;
+        }
+        #endingScreen .restart {
+            margin-top: 40px;
+            padding: 12px 40px;
+            background: transparent;
+            border: 1px solid rgba(255,255,255,0.4);
+            color: #ccc;
+            border-radius: 30px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+            font-family: inherit;
+        }
+        #endingScreen .restart:hover {
+            background: rgba(255,255,255,0.1);
+            border-color: rgba(255,255,255,0.7);
+        }
+        /* 开始画面 */
+        #startScreen {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: #1a1a2e;
+            z-index: 300;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: #e8e8e8;
+        }
+        #startScreen h1 {
+            font-size: 36px;
+            letter-spacing: 12px;
+            margin-bottom: 20px;
+            color: #d4d4d4;
+        }
+        #startScreen .subtitle {
+            font-size: 14px;
+            color: #888;
+            margin-bottom: 60px;
+            letter-spacing: 4px;
+        }
+        #startScreen .startBtn {
+            padding: 15px 50px;
+            background: transparent;
+            border: 1px solid rgba(255,255,255,0.3);
+            color: #ccc;
+            border-radius: 30px;
+            cursor: pointer;
+            font-size: 16px;
+            letter-spacing: 4px;
+            transition: all 0.3s;
+            font-family: inherit;
+        }
+        #startScreen .startBtn:hover {
+            background: rgba(255,255,255,0.1);
+            border-color: rgba(255,255,255,0.6);
+        }
+        #mobileHint {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            color: rgba(255,255,255,0.6);
+            font-size: 12px;
+            z-index: 50;
+            display: none;
+        }
+        #bgMusic { display: none; }
+    </style>
+</head>
+<body>
+    <canvas id="scene"></canvas>
+
+    <div id="joystick">
+        <div class="joystick-base"></div>
+        <div class="joystick-thumb"></div>
+    </div>
+
+    <div class="top-bar">
+        <div class="title-block">
+            <div class="title">笼中鸟</div>
+            <div class="subtitle">童年漫山遍野，长大却只能在梦中寻找</div>
+        </div>
+        <div class="progress-display">
+            <div class="count" id="freeCount">0 / 9</div>
+            <div class="label">已释放</div>
+        </div>
+    </div>
+
+    <div class="fps" id="fps">60 FPS</div>
+
+    <div id="dialogBox" onclick="nextDialog()">
+        <div id="dialogText"></div>
+        <div class="hint">点击继续</div>
+    </div>
+
+    <div id="endingScreen">
+        <h1>梦醒时分</h1>
+        <div class="poem">
+            昔日山野任飞翔，<br>
+            今朝樊笼锁日光。<br>
+            九羽归天云渐碧，<br>
+            一身入笼草初黄。<br>
+            少年不识天涯远，<br>
+            老大方知世事忙。<br>
+            若问此身何所似，<br>
+            笼中鸟是梦中人。
+        </div>
+        <div class="thought">
+            我们曾像那只鸟，拥有整片天空。<br>
+            后来我们为自己编织了笼子——<br>
+            名为责任，名为生存，名为"长大了"。<br>
+            每释放一只鸟，是否也释放了曾经的自己？<br>
+            当最后一扇门关上，才发现<br>
+            困住我们的从不是世界，<br>
+            而是那个学会说"算了"的自己。
+        </div>
+        <button class="restart" onclick="location.reload()">再做一场梦</button>
+    </div>
+
+    <div id="startScreen">
+        <h1>笼中鸟</h1>
+        <div class="subtitle">童年漫山遍野，长大却只能在梦中寻找</div>
+        <button class="startBtn" onclick="startGame()">进入梦境</button>
+    </div>
+
+    <div id="mobileHint">左侧摇杆移动 · 右侧滑动视角 · 点击释放鸟儿</div>
+
+    <video id="bgMusic" loop playsinline>
+        <source src="https://tymov2.a.kwimgs.com/upic/2025/08/25/09/BMjAyNTA4MjUwOTAzNDZfMTczOTU0NDM0N18xNzMzNDI1NDk0MTBfMl8z_b_Bff18712df285918863ed0c2dcdf1f6e2.mp4?clientCacheKey=3xuhapue4pxjp4w_b.mp4&tt=b&di=707e48b4&bp=10000" type="video/mp4">
+    </video>
+
+    <script>
+        // ==================== 噪声生成器 ====================
+        class SimplexNoise {
+            constructor() {
+                this.p = new Uint8Array(256);
+                for(let i=0;i<256;i++) this.p[i]=i;
+                for(let i=255;i>0;i--){
+                    const j=Math.floor(Math.random()*(i+1));
+                    [this.p[i],this.p[j]]=[this.p[j],this.p[i]];
+                }
+                this.perm=new Uint8Array(512);
+                for(let i=0;i<512;i++) this.perm[i]=this.p[i&255];
+            }
+            dot(g, x, y) { return g[0]*x + g[1]*y; }
+            noise2D(x, y) {
+                const F2=0.5*(Math.sqrt(3)-1), G2=(3-Math.sqrt(3))/6;
+                let n0,n1,n2;
+                let s=(x+y)*F2;
+                let i=Math.floor(x+s), j=Math.floor(y+s);
+                let t=(i+j)*G2;
+                let X0=i-t, Y0=j-t;
+                let x0=x-X0, y0=y-Y0;
+                let i1,j1;
+                if(x0>y0){i1=1;j1=0;}else{i1=0;j1=1;}
+                let x1=x0-i1+G2, y1=y0-j1+G2;
+                let x2=x0-1+2*G2, y2=y0-1+2*G2;
+                let ii=i&255, jj=j&255;
+                const grad3=[[1,1],[-1,1],[1,-1],[-1,-1],[1,0],[-1,0],[1,0],[-1,0],[0,1],[0,-1],[0,1],[0,-1]];
+                let gi0=this.perm[ii+this.perm[jj]]%12;
+                let gi1=this.perm[ii+i1+this.perm[jj+j1]]%12;
+                let gi2=this.perm[ii+1+this.perm[jj+1]]%12;
+                let t0=0.5-x0*x0-y0*y0;
+                if(t0<0) n0=0; else {t0*=t0; n0=t0*t0*this.dot(grad3[gi0],x0,y0);}
+                let t1=0.5-x1*x1-y1*y1;
+                if(t1<0) n1=0; else {t1*=t1; n1=t1*t1*this.dot(grad3[gi1],x1,y1);}
+                let t2=0.5-x2*x2-y2*y2;
+                if(t2<0) n2=0; else {t2*=t2; n2=t2*t2*this.dot(grad3[gi2],x2,y2);}
+                return 70*(n0+n1+n2);
+            }
+        }
+
+        // ==================== 全局变量 ====================
+        let scene, camera, renderer, clock;
+        let terrainChunks = new Map();
+        let chunkSize = 40;
+        let renderDistance = 3;
+        let noise = new SimplexNoise();
+        let player = { x: 0, y: 5, z: 0, height: 2 };
+        let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
+        let yaw = 0, pitch = 0;
+        let isMobile = false;
+        let birds = [];
+        let freedCount = 0;
+        let gameState = 'start';
+        let dialogQueue = [];
+        let currentDialogIndex = 0;
+        let endingTriggered = false;
+        let raycaster = new THREE.Raycaster();
+        let mouse = new THREE.Vector2();
+        let cageGroup = null;
+        let cageDescending = false;
+        let cageY = 50;
+        let skyMaterial;
+        let grassTexture;
+
+        // 颜色与FOV过渡
+        let colorPhase = 'normal';
+        let colorPhaseTimer = 0;
+        let currentGrassColor = new THREE.Color(0.3, 0.25, 0.2); // 初始棕色
+        let currentSkyColor = new THREE.Color(0.15, 0.15, 0.2);
+        let currentFogColor = new THREE.Color(0.15, 0.15, 0.2);
+
+        // 摇杆
+        let joystickActive = false;
+        let joystickOrigin = { x: 0, y: 0 };
+        let joystickTouchId = null;
+
+        // 触摸追踪（支持双指）
+        let touchMap = new Map();
+
+        // 对话数据
+        const dialogs = [
+            "你睁开眼，发现自己站在一片灰蒙蒙的草地上。",
+            "记忆像雾一样笼罩着这里——这是你童年奔跑过的地方。",
+            "那时候，天是蓝的，草是绿的，鸟儿在天上自由地飞。",
+            "可现在一切都褪色了，像是被时间洗旧的老照片。",
+            "你隐约记得，这里曾经有许多鸟...它们被关在笼子里。",
+            "去找到它们吧，释放它们，也许能找回什么。",
+            "点击或靠近笼中的鸟，为它们打开那扇小小的门。"
+        ];
+        const endingDialogs = [
+            "第九只鸟飞向天空时，你感到一阵眩晕。",
+            "草地开始变绿，天空开始变蓝——记忆正在回来。",
+            "可是，为什么你的身后却越来越灰暗？",
+            "你转过身，看见一个巨大的笼子正从天上缓缓降下...",
+            "你释放了所有的鸟，却忘了——你自己也是一只笼中鸟。"
+        ];
+
+        // ==================== Canvas草地纹理 ====================
+        function createGrassTexture() {
+            const size = 512;
+            const canvas = document.createElement('canvas');
+            canvas.width = size; canvas.height = size;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#3d2e1e';
+            ctx.fillRect(0, 0, size, size);
+            for(let layer = 0; layer < 4; layer++) {
+                const count = 3000 + layer * 2000;
+                const alpha = 0.15 - layer * 0.03;
+                for(let i = 0; i < count; i++) {
+                    const x = Math.random() * size, y = Math.random() * size;
+                    const r = Math.random() * 2 + 0.5;
+                    const g = Math.floor(60 + Math.random() * 50);
+                    ctx.fillStyle = `rgba(${30 + Math.random()*20}, ${g}, ${20 + Math.random()*15}, ${alpha})`;
+                    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+                }
+            }
+            for(let i = 0; i < 5000; i++) {
+                const x = Math.random() * size, y = Math.random() * size;
+                const len = Math.random() * 8 + 3;
+                const angle = Math.random() * Math.PI * 2;
+                const g = Math.floor(70 + Math.random() * 60);
+                ctx.strokeStyle = `rgba(35, ${g}, 25, 0.22)`;
+                ctx.lineWidth = 0.5 + Math.random();
+                ctx.beginPath();
+                ctx.moveTo(x, y);
+                ctx.lineTo(x + Math.cos(angle)*len, y + Math.sin(angle)*len);
+                ctx.stroke();
+            }
+            for(let i = 0; i < 30; i++) {
+                const x = Math.random() * size, y = Math.random() * size;
+                const r = Math.random() * 20 + 10;
+                ctx.fillStyle = `rgba(70, 55, 38, 0.12)`;
+                ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+            }
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.wrapS = THREE.RepeatWrapping;
+            tex.wrapT = THREE.RepeatWrapping;
+            tex.repeat.set(4, 4);
+            return tex;
+        }
+
+        // ==================== 初始化 ====================
+        function init() {
+            scene = new THREE.Scene();
+            scene.fog = new THREE.FogExp2(0x1f1a18, 0.025);
+
+            camera = new THREE.PerspectiveCamera(85, window.innerWidth/window.innerHeight, 0.1, 300);
+            camera.position.set(0, player.height, 0);
+
+            renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('scene'), antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+            clock = new THREE.Clock();
+
+            // 天空盒
+            const skyGeo = new THREE.SphereGeometry(200, 32, 32);
+            skyMaterial = new THREE.MeshBasicMaterial({
+                color: currentSkyColor,
+                side: THREE.BackSide,
+                fog: false
+            });
+            scene.add(new THREE.Mesh(skyGeo, skyMaterial));
+
+            // 光照
+            const ambientLight = new THREE.AmbientLight(0x404040, 0.5);
+            scene.add(ambientLight);
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.4);
+            dirLight.position.set(50, 100, 50);
+            scene.add(dirLight);
+
+            isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+            if(isMobile) document.getElementById('mobileHint').style.display = 'block';
+
+            grassTexture = createGrassTexture();
+            setupControls();
+            updateTerrain();
+            animate();
+        }
+
+        // ==================== 地形高度 ====================
+        function getTerrainHeight(x, z) {
+            let h = 0;
+            h += noise.noise2D(x * 0.02, z * 0.02) * 8;
+            h += noise.noise2D(x * 0.05, z * 0.05) * 4;
+            h += noise.noise2D(x * 0.1, z * 0.1) * 1;
+            return Math.max(-2, h);
+        }
+
+        // ==================== 创建区块 ====================
+        function createChunk(cx, cz) {
+            const key = cx + ',' + cz;
+            if(terrainChunks.has(key)) return;
+
+            const group = new THREE.Group();
+            group.position.set(cx * chunkSize, 0, cz * chunkSize);
+
+            // 地面
+            const groundGeo = new THREE.PlaneGeometry(chunkSize, chunkSize, 32, 32);
+            groundGeo.rotateX(-Math.PI / 2);
+            const positions = groundGeo.attributes.position;
+            for(let i = 0; i < positions.count; i++) {
+                const wx = positions.getX(i) + cx * chunkSize;
+                const wz = positions.getZ(i) + cz * chunkSize;
+                positions.setY(i, getTerrainHeight(wx, wz));
+            }
+            groundGeo.computeVertexNormals();
+
+            const groundMat = new THREE.MeshStandardMaterial({
+                color: currentGrassColor,
+                map: grassTexture,
+                roughness: 0.9,
+                metalness: 0.05
+            });
+
+            const groundMesh = new THREE.Mesh(groundGeo, groundMat);
+            group.add(groundMesh);
+
+            // InstancedMesh 草
+            const grassCount = 400;
+            const grassGeo = new THREE.PlaneGeometry(0.15, 0.6);
+            grassGeo.translate(0, 0.3, 0);
+            const grassMat = new THREE.MeshStandardMaterial({
+                color: new THREE.Color(currentGrassColor.r * 0.7, currentGrassColor.g * 1.1, currentGrassColor.b * 0.6),
+                side: THREE.DoubleSide,
+                transparent: true,
+                alphaTest: 0.5,
+                roughness: 0.8
+            });
+            const grassMesh = new THREE.InstancedMesh(grassGeo, grassMat, grassCount);
+            const dummy = new THREE.Object3D();
+            for(let i = 0; i < grassCount; i++) {
+                const lx = (Math.random() - 0.5) * chunkSize;
+                const lz = (Math.random() - 0.5) * chunkSize;
+                const wx = cx * chunkSize + lx, wz = cz * chunkSize + lz;
+                const wy = getTerrainHeight(wx, wz);
+                dummy.position.set(lx, wy, lz);
+                dummy.rotation.y = Math.random() * Math.PI;
+                dummy.rotation.x = (Math.random() - 0.5) * 0.3;
+                const s = 0.7 + Math.random() * 0.6;
+                dummy.scale.set(s, s, s);
+                dummy.updateMatrix();
+                grassMesh.setMatrixAt(i, dummy.matrix);
+            }
+            grassMesh.instanceMatrix.needsUpdate = true;
+            group.add(grassMesh);
+
+            // InstancedMesh 静态云
+            const cloudCount = 8;
+            const cloudGeo = new THREE.SphereGeometry(1, 8, 6);
+            const cloudMat = new THREE.MeshBasicMaterial({
+                color: 0xdddddd, transparent: true, opacity: 0.12, depthWrite: false
+            });
+            const cloudMesh = new THREE.InstancedMesh(cloudGeo, cloudMat, cloudCount);
+            for(let i = 0; i < cloudCount; i++) {
+                const lx = (Math.random() - 0.5) * chunkSize;
+                const lz = (Math.random() - 0.5) * chunkSize;
+                const wx = cx * chunkSize + lx, wz = cz * chunkSize + lz;
+                const wy = getTerrainHeight(wx, wz) + 2 + Math.random() * 3;
+                dummy.position.set(lx, wy, lz);
+                const s = 2 + Math.random() * 4;
+                dummy.scale.set(s, s * 0.4, s);
+                dummy.updateMatrix();
+                cloudMesh.setMatrixAt(i, dummy.matrix);
+            }
+            cloudMesh.instanceMatrix.needsUpdate = true;
+            group.add(cloudMesh);
+
+            scene.add(group);
+            terrainChunks.set(key, { group, cx, cz, groundMesh, grassMat, cloudMat });
+        }
+
+        function updateTerrain() {
+            const pcx = Math.floor(player.x / chunkSize);
+            const pcz = Math.floor(player.z / chunkSize);
+            for(let x = -renderDistance; x <= renderDistance; x++) {
+                for(let z = -renderDistance; z <= renderDistance; z++) {
+                    createChunk(pcx + x, pcz + z);
+                }
+            }
+            for(const [key, chunk] of terrainChunks) {
+                if(Math.abs(chunk.cx - pcx) > renderDistance + 1 || Math.abs(chunk.cz - pcz) > renderDistance + 1) {
+                    scene.remove(chunk.group);
+                    chunk.group.traverse(c => {
+                        if(c.geometry) c.geometry.dispose();
+                        if(c.material) c.material.dispose();
+                    });
+                    terrainChunks.delete(key);
+                }
+            }
+        }
+
+        // ==================== 鸟的生成（栏杆使用InstancedMesh） ====================
+        function spawnBird() {
+            if(gameState !== 'playing' && gameState !== 'ending') return;
+            if(birds.length >= 5) return;
+
+            const angle = Math.random() * Math.PI * 2;
+            const dist = 15 + Math.random() * 25;
+            const x = player.x + Math.cos(angle) * dist;
+            const z = player.z + Math.sin(angle) * dist;
+            const y = getTerrainHeight(x, z) + 1.5;
+
+            const cageGroup = new THREE.Group();
+            cageGroup.position.set(x, y, z);
+
+            // 底座
+            const base = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.8, 0.8, 0.1, 8),
+                new THREE.MeshStandardMaterial({ color: 0x4a3728 })
+            );
+            cageGroup.add(base);
+
+            // 栏杆（InstancedMesh）
+            const barGeo = new THREE.CylinderGeometry(0.02, 0.02, 1.5, 4);
+            const barMat = new THREE.MeshStandardMaterial({ color: 0x6b5637 });
+            const barMesh = new THREE.InstancedMesh(barGeo, barMat, 8);
+            const dummy = new THREE.Object3D();
+            for(let i = 0; i < 8; i++) {
+                const a = (i / 8) * Math.PI * 2;
+                dummy.position.set(Math.cos(a) * 0.7, 0.75, Math.sin(a) * 0.7);
+                dummy.updateMatrix();
+                barMesh.setMatrixAt(i, dummy.matrix);
+            }
+            barMesh.instanceMatrix.needsUpdate = true;
+            cageGroup.add(barMesh);
+
+            // 顶
+            const top = new THREE.Mesh(
+                new THREE.ConeGeometry(0.8, 0.5, 8),
+                new THREE.MeshStandardMaterial({ color: 0x4a3728 })
+            );
+            top.position.y = 1.75;
+            cageGroup.add(top);
+
+            // 黄色鸟
+            const birdBody = new THREE.Mesh(
+                new THREE.SphereGeometry(0.22, 8, 8),
+                new THREE.MeshStandardMaterial({ color: 0xffcc33 })
+            );
+            birdBody.position.y = 0.6;
+            cageGroup.add(birdBody);
+
+            const birdHead = new THREE.Mesh(
+                new THREE.SphereGeometry(0.14, 8, 8),
+                new THREE.MeshStandardMaterial({ color: 0xffdd55 })
+            );
+            birdHead.position.set(0, 0.82, 0.12);
+            cageGroup.add(birdHead);
+
+            const wingL = new THREE.Mesh(
+                new THREE.PlaneGeometry(0.3, 0.15),
+                new THREE.MeshStandardMaterial({ color: 0xffcc33, side: THREE.DoubleSide })
+            );
+            wingL.position.set(-0.2, 0.65, 0);
+            wingL.rotation.z = 0.3;
+            cageGroup.add(wingL);
+
+            const wingR = new THREE.Mesh(
+                new THREE.PlaneGeometry(0.3, 0.15),
+                new THREE.MeshStandardMaterial({ color: 0xffcc33, side: THREE.DoubleSide })
+            );
+            wingR.position.set(0.2, 0.65, 0);
+            wingR.rotation.z = -0.3;
+            cageGroup.add(wingR);
+
+            // 发光
+            const glowMat = new THREE.MeshBasicMaterial({
+                color: 0xffaa44, transparent: true, opacity: 0.1, side: THREE.BackSide
+            });
+            const glow = new THREE.Mesh(new THREE.SphereGeometry(1.2, 16, 16), glowMat);
+            glow.position.y = 0.8;
+            cageGroup.add(glow);
+
+            scene.add(cageGroup);
+
+            birds.push({
+                group: cageGroup,
+                freed: false, x, y, z,
+                glow: glow, time: Math.random() * 100,
+                birdParts: [birdBody, birdHead, wingL, wingR],
+                barMesh: barMesh
+            });
+        }
+
+        // ==================== 释放鸟（横向→向上3秒→1秒后笼子InstancedMesh全解体） ====================
+        function freeBird(index) {
+            const bird = birds[index];
+            if(bird.freed) return;
+            bird.freed = true;
+            freedCount++;
+            document.getElementById('freeCount').textContent = freedCount + ' / 9';
+
+            const cage = bird.group;
+            const birdParts = bird.birdParts;
+            const barMesh = bird.barMesh;
+
+            // 收集所有笼子部件（含InstancedMesh每个实例）
+            const cageParts = [];
+            const dummy = new THREE.Object3D();
+
+            cage.traverse(child => {
+                if(!child.isMesh || child === bird.glow || birdParts.includes(child)) return;
+
+                if(child.isInstancedMesh) {
+                    // InstancedMesh：为每个实例创建独立飞散Mesh
+                    for(let i = 0; i < child.count; i++) {
+                        child.getMatrixAt(i, dummy.matrix);
+                        const pos = new THREE.Vector3();
+                        const rot = new THREE.Quaternion();
+                        const scale = new THREE.Vector3();
+                        dummy.matrix.decompose(pos, rot, scale);
+                        pos.add(cage.position);
+
+                        const mesh = new THREE.Mesh(child.geometry, child.material.clone());
+                        mesh.position.copy(pos);
+                        mesh.quaternion.copy(rot);
+                        mesh.scale.copy(scale);
+                        scene.add(mesh);
+                        cageParts.push(mesh);
+                    }
+                    child.visible = false;
+                } else {
+                    const worldPos = new THREE.Vector3();
+                    const worldQuat = new THREE.Quaternion();
+                    const worldScale = new THREE.Vector3();
+                    child.getWorldPosition(worldPos);
+                    child.getWorldQuaternion(worldQuat);
+                    child.getWorldScale(worldScale);
+
+                    const mesh = new THREE.Mesh(child.geometry, child.material.clone());
+                    mesh.position.copy(worldPos);
+                    mesh.quaternion.copy(worldQuat);
+                    mesh.scale.copy(worldScale);
+                    scene.add(mesh);
+                    cageParts.push(mesh);
+                    child.visible = false;
+                }
+            });
+
+            let startTime = performance.now();
+            let disintegrated = false;
+
+            function animateRelease() {
+                const elapsed = (performance.now() - startTime) / 1000;
+
+                // 阶段1: 0-0.5s 横向飞行
+                if(elapsed < 0.5) {
+                    birdParts.forEach(p => { p.position.x += 0.03; });
+                    birdParts[2].rotation.z = 0.3 + Math.sin(elapsed * 18) * 0.7;
+                    birdParts[3].rotation.z = -0.3 - Math.sin(elapsed * 18) * 0.7;
+                }
+                // 阶段2: 0.5-3.5s 向上飞持续3秒
+                else if(elapsed < 3.5) {
+                    birdParts.forEach(p => {
+                        p.position.y += 0.04;
+                        p.position.x += Math.sin(elapsed * 4) * 0.003;
+                    });
+                    birdParts[2].rotation.z = Math.sin(elapsed * 14) * 0.9;
+                    birdParts[3].rotation.z = -Math.sin(elapsed * 14) * 0.9;
+                }
+                // 3.5s后移除鸟
+                else {
+                    birdParts.forEach(p => { if(p.parent) p.parent.remove(p); });
+                }
+
+                // 1.0s后笼子InstancedMesh全解体
+                if(elapsed > 1.0 && !disintegrated) {
+                    disintegrated = true;
+                    const velocities = cageParts.map(() => ({
+                        vx: (Math.random() - 0.5) * 0.12,
+                        vy: Math.random() * 0.1 + 0.02,
+                        vz: (Math.random() - 0.5) * 0.12,
+                        vr: (Math.random() - 0.5) * 0.35
+                    }));
+                    let life = 1.0;
+                    const disInt = setInterval(() => {
+                        life -= 0.018;
+                        cageParts.forEach((part, i) => {
+                            part.position.x += velocities[i].vx;
+                            part.position.y += velocities[i].vy;
+                            part.position.z += velocities[i].vz;
+                            part.rotation.x += velocities[i].vr;
+                            part.rotation.z += velocities[i].vr * 0.6;
+                            part.scale.multiplyScalar(0.97);
+                            part.material.opacity = life;
+                            part.material.transparent = true;
+                        });
+                        if(life <= 0) {
+                            clearInterval(disInt);
+                            cageParts.forEach(p => scene.remove(p));
+                        }
+                    }, 30);
+                }
+
+                if(elapsed < 4.0) requestAnimationFrame(animateRelease);
+            }
+            animateRelease();
+
+            birds.splice(index, 1);
+
+            if(freedCount >= 9 && !endingTriggered) {
+                endingTriggered = true;
+                gameState = 'ending';
+                startEndingSequence();
+            }
+        }
+
+        // ==================== 结束序列 ====================
+        function startEndingSequence() {
+            colorPhase = 'brightening';
+            colorPhaseTimer = 0;
+            dialogQueue = [...endingDialogs];
+            currentDialogIndex = 0;
+            showDialog();
+            createDescendingCage();
+        }
+
+        function createDescendingCage() {
+            cageGroup = new THREE.Group();
+            cageGroup.position.set(player.x, 50, player.z);
+            const cageRadius = 3, cageHeight = 6;
+
+            const bottom = new THREE.Mesh(
+                new THREE.CylinderGeometry(cageRadius, cageRadius, 0.2, 16),
+                new THREE.MeshStandardMaterial({ color: 0x3a2a1a, metalness: 0.8, roughness: 0.3 })
+            );
+            cageGroup.add(bottom);
+
+            for(let i = 0; i < 16; i++) {
+                const bar = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.05, 0.05, cageHeight, 4),
+                    new THREE.MeshStandardMaterial({ color: 0x5a4a3a, metalness: 0.7, roughness: 0.3 })
+                );
+                const a = (i / 16) * Math.PI * 2;
+                bar.position.set(Math.cos(a) * cageRadius, cageHeight/2, Math.sin(a) * cageRadius);
+                cageGroup.add(bar);
+            }
+
+            const top = new THREE.Mesh(
+                new THREE.ConeGeometry(cageRadius, 1, 16),
+                new THREE.MeshStandardMaterial({ color: 0x3a2a1a, metalness: 0.8, roughness: 0.3 })
+            );
+            top.position.y = cageHeight + 0.5;
+            cageGroup.add(top);
+
+            for(let h = 1; h < cageHeight; h += 1.5) {
+                const ring = new THREE.Mesh(
+                    new THREE.TorusGeometry(cageRadius, 0.05, 4, 16),
+                    new THREE.MeshStandardMaterial({ color: 0x5a4a3a, metalness: 0.7 })
+                );
+                ring.position.y = h;
+                ring.rotation.x = Math.PI / 2;
+                cageGroup.add(ring);
+            }
+
+            scene.add(cageGroup);
+            cageDescending = true;
+            cageY = 50;
+        }
+
+        // ==================== 颜色过渡 + FOV + 草色跟随 ====================
+        function updateColorTransition(delta) {
+            if(colorPhase === 'normal') return;
+            colorPhaseTimer += delta;
+
+            if(colorPhase === 'brightening') {
+                const t = Math.min(colorPhaseTimer / 10, 1);
+                // 草地：棕色 -> 翠绿
+                currentGrassColor.setRGB(
+                    THREE.MathUtils.lerp(0.30, 0.15, t),
+                    THREE.MathUtils.lerp(0.25, 0.60, t),
+                    THREE.MathUtils.lerp(0.20, 0.22, t)
+                );
+                // 天空：灰暗 -> 天蓝
+                currentSkyColor.setRGB(
+                    THREE.MathUtils.lerp(0.15, 0.40, t),
+                    THREE.MathUtils.lerp(0.15, 0.70, t),
+                    THREE.MathUtils.lerp(0.20, 0.90, t)
+                );
+                currentFogColor.copy(currentSkyColor);
+                // FOV: 85 -> 120
+                camera.fov = THREE.MathUtils.lerp(85, 120, t);
+                camera.updateProjectionMatrix();
+
+                if(t >= 1) {
+                    colorPhase = 'darkening';
+                    colorPhaseTimer = 0;
+                }
+            } else if(colorPhase === 'darkening') {
+                const t = Math.min(colorPhaseTimer / 10, 1);
+                // 草地：翠绿 -> 深黑绿
+                currentGrassColor.setRGB(
+                    THREE.MathUtils.lerp(0.15, 0.03, t),
+                    THREE.MathUtils.lerp(0.60, 0.05, t),
+                    THREE.MathUtils.lerp(0.22, 0.03, t)
+                );
+                // 天空：天蓝 -> 深黑
+                currentSkyColor.setRGB(
+                    THREE.MathUtils.lerp(0.40, 0.01, t),
+                    THREE.MathUtils.lerp(0.70, 0.01, t),
+                    THREE.MathUtils.lerp(0.90, 0.02, t)
+                );
+                currentFogColor.copy(currentSkyColor);
+                // FOV: 120 -> 60
+                camera.fov = THREE.MathUtils.lerp(120, 60, t);
+                camera.updateProjectionMatrix();
+
+                scene.fog.density = THREE.MathUtils.lerp(0.025, 0.06, t);
+
+                if(t >= 1) colorPhase = 'ended';
+            }
+
+            skyMaterial.color.copy(currentSkyColor);
+            scene.fog.color.copy(currentFogColor);
+
+            terrainChunks.forEach(chunk => {
+                if(chunk.groundMesh && chunk.groundMesh.material) {
+                    chunk.groundMesh.material.color.copy(currentGrassColor);
+                }
+                if(chunk.grassMat) {
+                    const gc = currentGrassColor;
+                    chunk.grassMat.color.setRGB(
+                        Math.min(1, gc.r * 0.8 + 0.05),
+                        Math.min(1, gc.g * 1.2 + 0.08),
+                        Math.min(1, gc.b * 0.7 + 0.03)
+                    );
+                }
+            });
+        }
+
+        // ==================== 对话系统 ====================
+        function showDialog() {
+            if(currentDialogIndex >= dialogQueue.length) {
+                document.getElementById('dialogBox').classList.remove('show');
+                if(gameState === 'ending' && endingTriggered && colorPhase === 'ended') {
+                    showEnding();
+                }
+                return;
+            }
+            const box = document.getElementById('dialogBox');
+            document.getElementById('dialogText').textContent = dialogQueue[currentDialogIndex];
+            box.classList.add('show');
+        }
+        function nextDialog() {
+            currentDialogIndex++;
+            showDialog();
+        }
+        function showEnding() {
+            gameState = 'ended';
+            document.getElementById('endingScreen').classList.add('show');
+            const music = document.getElementById('bgMusic');
+            let vol = music.volume;
+            const fadeOut = setInterval(() => {
+                vol -= 0.02;
+                if(vol <= 0) { music.pause(); clearInterval(fadeOut); }
+                else music.volume = vol;
+            }, 100);
+        }
+
+        // ==================== 控制（键盘 + 双指触摸 + 实体摇杆） ====================
+        function setupControls() {
+            // 键盘
+            document.addEventListener('keydown', (e) => {
+                switch(e.key.toLowerCase()) {
+                    case 'w': moveForward = true; break;
+                    case 's': moveBackward = true; break;
+                    case 'a': moveLeft = true; break;
+                    case 'd': moveRight = true; break;
+                }
+            });
+            document.addEventListener('keyup', (e) => {
+                switch(e.key.toLowerCase()) {
+                    case 'w': moveForward = false; break;
+                    case 's': moveBackward = false; break;
+                    case 'a': moveLeft = false; break;
+                    case 'd': moveRight = false; break;
+                }
+            });
+
+            // 鼠标视角（PC）
+            let isPointerLocked = false;
+            renderer.domElement.addEventListener('click', () => {
+                if(gameState === 'playing' && !isMobile) {
+                    renderer.domElement.requestPointerLock();
+                }
+            });
+            document.addEventListener('pointerlockchange', () => {
+                isPointerLocked = document.pointerLockElement === renderer.domElement;
+            });
+            document.addEventListener('mousemove', (e) => {
+                if(isPointerLocked && gameState === 'playing') {
+                    yaw -= e.movementX * 0.002;
+                    pitch -= e.movementY * 0.002;
+                    pitch = Math.max(-Math.PI/2, Math.min(Math.PI/2, pitch));
+                }
+            });
+
+            // PC点击释放
+            renderer.domElement.addEventListener('click', (e) => {
+                if(gameState !== 'playing' && gameState !== 'ending') return;
+                if(isPointerLocked) return;
+                mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+                mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+                raycaster.setFromCamera(mouse, camera);
+                for(let i = birds.length - 1; i >= 0; i--) {
+                    const intersects = raycaster.intersectObject(birds[i].group, true);
+                    if(intersects.length > 0 && intersects[0].distance < 8) {
+                        freeBird(i);
+                        break;
+                    }
+                }
+            });
+
+            // 移动端双指触摸（左摇杆 + 右视角，互不干涉）
+            const joystick = document.getElementById('joystick');
+            const thumb = joystick.querySelector('.joystick-thumb');
+
+            function getTouchPos(touch) {
+                return { x: touch.clientX, y: touch.clientY };
+            }
+
+            renderer.domElement.addEventListener('touchstart', (e) => {
+                for(let touch of e.changedTouches) {
+                    const pos = getTouchPos(touch);
+                    const isLeft = pos.x < window.innerWidth / 2;
+
+                    touchMap.set(touch.identifier, {
+                        startX: pos.x, startY: pos.y,
+                        lastX: pos.x, lastY: pos.y,
+                        isJoystick: isLeft,
+                        isCamera: !isLeft,
+                        isTap: true
+                    });
+
+                    if(isLeft && !joystickActive) {
+                        joystickActive = true;
+                        joystickTouchId = touch.identifier;
+                        joystickOrigin = { x: pos.x, y: pos.y };
+                        joystick.style.left = (pos.x - 80) + 'px';
+                        joystick.style.top = (pos.y - 80) + 'px';
+                        joystick.style.display = 'block';
+                        thumb.style.transform = 'translate(0px, 0px)';
+                    }
+                }
+            }, { passive: false });
+
+            renderer.domElement.addEventListener('touchmove', (e) => {
+                e.preventDefault();
+                for(let touch of e.changedTouches) {
+                    const t = touchMap.get(touch.identifier);
+                    if(!t) continue;
+
+                    const pos = getTouchPos(touch);
+                    const dx = pos.x - t.startX;
+                    const dy = pos.y - t.startY;
+
+                    if(Math.abs(dx) > 8 || Math.abs(dy) > 8) t.isTap = false;
+
+                    if(t.isJoystick && joystickActive && touch.identifier === joystickTouchId) {
+                        // 摇杆控制移动
+                        const jdx = pos.x - joystickOrigin.x;
+                        const jdy = pos.y - joystickOrigin.y;
+                        const dist = Math.sqrt(jdx*jdx + jdy*jdy);
+                        const maxDist = 36;
+                        const clamped = Math.min(dist, maxDist);
+                        const angle = Math.atan2(jdy, jdx);
+                        const tx = Math.cos(angle) * clamped;
+                        const ty = Math.sin(angle) * clamped;
+                        thumb.style.transform = `translate(${tx}px, ${ty}px)`;
+
+                        moveForward = jdy < -10;
+                        moveBackward = jdy > 10;
+                        moveLeft = jdx < -10;
+                        moveRight = jdx > 10;
+                    }
+                    else if(t.isCamera) {
+                        // 右半边控制视角
+                        const cdx = pos.x - t.lastX;
+                        const cdy = pos.y - t.lastY;
+                        yaw -= cdx * 0.005;
+                        pitch -= cdy * 0.005;
+                        pitch = Math.max(-Math.PI/2, Math.min(Math.PI/2, pitch));
+                        t.lastX = pos.x;
+                        t.lastY = pos.y;
+                    }
+                }
+            }, { passive: false });
+
+            renderer.domElement.addEventListener('touchend', (e) => {
+                for(let touch of e.changedTouches) {
+                    const t = touchMap.get(touch.identifier);
+                    if(!t) continue;
+
+                    // 短点击 = 释放鸟
+                    if(t.isTap && (gameState === 'playing' || gameState === 'ending')) {
+                        mouse.x = (t.startX / window.innerWidth) * 2 - 1;
+                        mouse.y = -(t.startY / window.innerHeight) * 2 + 1;
+                        raycaster.setFromCamera(mouse, camera);
+                        for(let i = birds.length - 1; i >= 0; i--) {
+                            const intersects = raycaster.intersectObject(birds[i].group, true);
+                            if(intersects.length > 0 && intersects[0].distance < 8) {
+                                freeBird(i);
+                                break;
+                            }
+                        }
+                    }
+
+                    if(t.isJoystick && touch.identifier === joystickTouchId) {
+                        joystickActive = false;
+                        joystickTouchId = null;
+                        joystick.style.display = 'none';
+                        moveForward = false;
+                        moveBackward = false;
+                        moveLeft = false;
+                        moveRight = false;
+                    }
+
+                    touchMap.delete(touch.identifier);
+                }
+            });
+
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+        }
+
+        // ==================== 游戏开始 ====================
+        function startGame() {
+            document.getElementById('startScreen').style.display = 'none';
+            const music = document.getElementById('bgMusic');
+            music.volume = 0.4;
+            setTimeout(() => {
+                music.play().catch(e => console.log('音乐播放需要用户交互'));
+            }, 100);
+            gameState = 'playing';
+            dialogQueue = [...dialogs];
+            currentDialogIndex = 0;
+            showDialog();
+            setInterval(() => { if(gameState === 'playing') spawnBird(); }, 3000);
+            for(let i = 0; i < 3; i++) spawnBird();
+        }
+
+        // ==================== 主循环 ====================
+        function animate() {
+            requestAnimationFrame(animate);
+            const delta = clock.getDelta();
+            const time = clock.getElapsedTime();
+
+            if(gameState === 'playing' || gameState === 'ending') {
+                // 移动
+                const speed = 4 * delta;
+                const forward = new THREE.Vector3();
+                camera.getWorldDirection(forward);
+                forward.y = 0; forward.normalize();
+                const right = new THREE.Vector3();
+                right.crossVectors(forward, new THREE.Vector3(0, 1, 0));
+
+                if(moveForward) { player.x += forward.x * speed; player.z += forward.z * speed; }
+                if(moveBackward) { player.x -= forward.x * speed; player.z -= forward.z * speed; }
+                if(moveLeft) { player.x -= right.x * speed; player.z -= right.z * speed; }
+                if(moveRight) { player.x += right.x * speed; player.z += right.z * speed; }
+
+                player.y = getTerrainHeight(player.x, player.z) + player.height;
+                camera.position.set(player.x, player.y, player.z);
+                camera.rotation.order = 'YXZ';
+                camera.rotation.y = yaw;
+                camera.rotation.x = pitch;
+
+                updateTerrain();
+
+                // 鸟的动画
+                birds.forEach(bird => {
+                    if(!bird.freed) {
+                        bird.time += delta;
+                        bird.group.position.y = bird.y + Math.sin(bird.time * 2) * 0.1;
+                        bird.glow.material.opacity = 0.1 + Math.sin(bird.time * 3) * 0.05;
+                        bird.group.lookAt(player.x, bird.group.position.y, player.z);
+                    }
+                });
+
+                // 颜色 + FOV + 草色
+                updateColorTransition(delta);
+
+                // 笼子降下
+                if(cageDescending && cageGroup) {
+                    const targetY = player.y - 1;
+                    cageY = THREE.MathUtils.lerp(cageY, targetY, delta * 0.8);
+                    cageGroup.position.set(player.x, cageY, player.z);
+                    if(Math.abs(cageY - targetY) < 0.5 && !document.getElementById('endingScreen').classList.contains('show')) {
+                        if(currentDialogIndex >= dialogQueue.length && colorPhase === 'ended') {
+                            showEnding();
+                        }
+                    }
+                }
+
+                // 靠近自动释放
+                for(let i = birds.length - 1; i >= 0; i--) {
+                    const dist = Math.sqrt(Math.pow(birds[i].x - player.x, 2) + Math.pow(birds[i].z - player.z, 2));
+                    if(dist < 2.5) freeBird(i);
+                }
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        init();
+    </script>
+</body>
+</html>
