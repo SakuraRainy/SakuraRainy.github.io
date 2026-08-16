@@ -1,0 +1,1725 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>后室 - The Backrooms | 完整版</title>
+    <style>
+        :root { --safe-bottom: env(safe-area-inset-bottom, 0px); }
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+        body { background: #000; overflow: hidden; touch-action: manipulation; font-family: 'Courier New', monospace; height: 100vh; height: 100dvh; width: 100vw; width: 100dvw; position: fixed; top: 0; left: 0; }
+        #canvas-container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
+        canvas { display: block; }
+        #overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; pointer-events: none; }
+        #joystick-zone { position: absolute; bottom: calc(40px + var(--safe-bottom)); left: 30px; width: 130px; height: 130px; pointer-events: auto; z-index: 20; }
+        #joystick-base { position: absolute; width: 120px; height: 120px; border-radius: 50%; background: rgba(200, 180, 120, 0.15); border: 2px solid rgba(200, 180, 120, 0.4); top: 50%; left: 50%; transform: translate(-50%, -50%); box-shadow: 0 0 20px rgba(180, 150, 80, 0.2); transition: border-color 0.3s; }
+        #joystick-thumb { position: absolute; width: 50px; height: 50px; border-radius: 50%; background: rgba(210, 185, 130, 0.5); border: 2px solid rgba(220, 200, 150, 0.7); top: 50%; left: 50%; transform: translate(-50%, -50%); box-shadow: 0 0 15px rgba(200, 170, 100, 0.4); transition: background 0.2s; }
+        #joystick-thumb.active { background: rgba(230, 200, 140, 0.7); box-shadow: 0 0 25px rgba(220, 180, 100, 0.6); }
+        #look-zone { position: absolute; bottom: calc(40px + var(--safe-bottom)); right: 30px; width: 100px; height: 100px; pointer-events: auto; z-index: 20; display: flex; align-items: center; justify-content: center; }
+        #look-icon { width: 60px; height: 60px; border-radius: 50%; background: rgba(200, 180, 120, 0.1); border: 2px dashed rgba(200, 180, 120, 0.35); display: flex; align-items: center; justify-content: center; animation: pulse 3s ease-in-out infinite; transition: all 0.3s; }
+        #look-icon svg { width: 30px; height: 30px; opacity: 0.6; transition: all 0.3s; }
+        #look-icon.flashlight-on { background: rgba(230, 210, 140, 0.25); border-color: rgba(230, 210, 160, 0.8); box-shadow: 0 0 25px rgba(220, 180, 100, 0.5); animation: none; }
+        #look-icon.flashlight-on svg { stroke: rgba(255, 240, 180, 0.95); opacity: 1; filter: drop-shadow(0 0 6px rgba(255, 220, 100, 0.8)); }
+        #look-icon.flashlight-on svg circle { fill: rgba(255, 240, 180, 0.9); }
+        @keyframes pulse { 0%, 100% { border-color: rgba(200, 180, 120, 0.3); box-shadow: 0 0 10px rgba(180, 150, 80, 0.1); } 50% { border-color: rgba(220, 195, 140, 0.55); box-shadow: 0 0 20px rgba(200, 170, 90, 0.25); } }
+        #info-bar { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); pointer-events: none; z-index: 15; text-align: center; display: none; }
+        #level-tag { color: rgba(200, 180, 130, 0.7); font-size: 13px; letter-spacing: 4px; text-transform: uppercase; text-shadow: 0 0 10px rgba(180, 150, 80, 0.5); }
+        #hint-text { color: rgba(190, 170, 130, 0.5); font-size: 10px; letter-spacing: 2px; margin-top: 4px; animation: fadeHint 4s ease-in-out infinite; }
+        @keyframes fadeHint { 0%, 100% { opacity: 0.3; } 50% { opacity: 0.7; } }
+        #flicker-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5; background: transparent; transition: background 0.05s; }
+        #loading-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #000; z-index: 100; display: flex; flex-direction: column; justify-content: center; align-items: center; color: #c8b87d; font-family: 'Courier New', monospace; }
+        #loading-screen .loader-text { font-size: 18px; letter-spacing: 4px; animation: blink 1.5s ease-in-out infinite; }
+        @keyframes blink { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
+        #tunnel-ui { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 50; pointer-events: none; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; padding-bottom: 120px; }
+        #door-hint { color: rgba(220, 200, 150, 0.95); font-size: 15px; letter-spacing: 3px; text-shadow: 0 0 15px rgba(180, 150, 80, 0.9); pointer-events: none; cursor: default; background: rgba(0,0,0,0.5); padding: 14px 28px; border: 1px solid rgba(200, 180, 130, 0.5); border-radius: 4px; backdrop-filter: blur(4px); transition: all 0.3s; opacity: 0.3; transform: scale(0.95); }
+        #door-hint.active { opacity: 1; pointer-events: auto; cursor: pointer; transform: scale(1); border-color: rgba(230, 210, 160, 0.9); box-shadow: 0 0 20px rgba(200, 170, 100, 0.4); animation: pulse 1.5s ease-in-out infinite; }
+        #tunnel-title { position: absolute; top: 30px; left: 50%; transform: translateX(-50%); color: rgba(200, 180, 130, 0.6); font-size: 12px; letter-spacing: 6px; text-transform: uppercase; }
+        #signal-glitch { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 60; pointer-events: none; opacity: 0; transition: opacity 0.1s; overflow: hidden; }
+        .scanlines { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.12) 2px, rgba(0,0,0,0.12) 4px); pointer-events: none; }
+        .vignette { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: radial-gradient(circle, transparent 50%, rgba(0,0,0,0.6) 100%); pointer-events: none; }
+        .rgb-split { position: absolute; top: 0; left: 0; width: 100%; height: 100%; box-shadow: inset 20px 0 40px rgba(255,0,0,0.1), inset -20px 0 40px rgba(0,255,255,0.1); pointer-events: none; opacity: 0; transition: opacity 0.1s; }
+        #level-title { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%) scale(0.95); color: #ffffff; font-size: 28px; font-weight: bold; letter-spacing: 6px; text-shadow: 0 0 20px rgba(255,255,255,0.9), 0 0 40px rgba(200,200,200,0.6), 0 0 80px rgba(255,255,255,0.3); z-index: 100; pointer-events: none; opacity: 0; transition: opacity 1.5s ease, transform 1.5s ease; font-family: 'Courier New', monospace; white-space: nowrap; text-align: center; }
+        #level-title.visible { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+        #minimap-container { position: fixed; top: 15px; left: 15px; width: 130px; height: 130px; z-index: 20; pointer-events: none; border: 1px solid rgba(200, 180, 130, 0.4); background: rgba(0, 0, 0, 0.5); border-radius: 4px; overflow: hidden; backdrop-filter: blur(2px); }
+        #minimap { width: 100%; height: 100%; image-rendering: pixelated; }
+        #time-display { position: fixed; top: 15px; right: 15px; z-index: 20; color: rgba(220, 210, 180, 0.9); font-family: 'Courier New', monospace; font-size: 14px; letter-spacing: 2px; background: rgba(0, 0, 0, 0.4); padding: 6px 12px; border: 1px solid rgba(200, 180, 130, 0.3); border-radius: 4px; backdrop-filter: blur(2px); pointer-events: none; }
+        #fps-counter { position: fixed; bottom: 10px; right: 10px; color: rgba(200, 180, 130, 0.6); font-size: 10px; z-index: 30; font-family: monospace; pointer-events: none; }
+        #backrooms-door-ui, #parking-door-ui, #pipe-door-ui { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 50; pointer-events: none; display: none; flex-direction: column; justify-content: flex-end; align-items: center; padding-bottom: 120px; }
+        .door-hint-style { color: rgba(220, 200, 150, 0.95); font-size: 15px; letter-spacing: 3px; text-shadow: 0 0 15px rgba(180, 150, 80, 0.9); pointer-events: none; cursor: default; background: rgba(0,0,0,0.5); padding: 14px 28px; border: 1px solid rgba(200, 180, 130, 0.5); border-radius: 4px; backdrop-filter: blur(4px); transition: all 0.3s; opacity: 0.3; transform: scale(0.95); }
+        .door-hint-style.active { opacity: 1; pointer-events: auto; cursor: pointer; transform: scale(1); border-color: rgba(230, 210, 160, 0.9); box-shadow: 0 0 20px rgba(200, 170, 100, 0.4); animation: pulse 1.5s ease-in-out infinite; }
+        #danger-bar { position: fixed; top: 60px; left: 50%; transform: translateX(-50%); z-index: 25; width: 200px; height: 6px; background: rgba(255,0,0,0.2); border-radius: 3px; overflow: hidden; display: none; }
+        #danger-fill { width: 0%; height: 100%; background: linear-gradient(90deg, #ff4444, #ff0000); transition: width 0.3s; box-shadow: 0 0 10px rgba(255,0,0,0.5); }
+        #danger-text { position: fixed; top: 70px; left: 50%; transform: translateX(-50%); z-index: 25; color: rgba(255,80,80,0.9); font-size: 11px; letter-spacing: 2px; display: none; text-shadow: 0 0 10px rgba(255,0,0,0.5); }
+        #run-hint { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 100; color: #ff0000; font-size: 32px; font-weight: bold; letter-spacing: 8px; text-shadow: 0 0 30px rgba(255,0,0,0.9); pointer-events: none; opacity: 0; transition: opacity 0.5s; font-family: 'Courier New', monospace; }
+        #run-hint.visible { opacity: 1; }
+        #ending-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 200; background: #000; display: none; flex-direction: column; justify-content: center; align-items: center; color: #c8b87d; }
+        #ending-screen .ending-title { font-size: 24px; letter-spacing: 6px; margin-bottom: 20px; text-shadow: 0 0 20px rgba(200,180,130,0.5); }
+        #ending-screen .ending-text { font-size: 14px; letter-spacing: 2px; color: rgba(200,180,130,0.7); margin-bottom: 40px; text-align: center; line-height: 2; }
+        #ending-screen .restart-btn { padding: 12px 40px; border: 1px solid rgba(200,180,130,0.5); background: rgba(200,180,130,0.1); color: #c8b87d; font-family: 'Courier New', monospace; font-size: 14px; letter-spacing: 3px; cursor: pointer; border-radius: 4px; transition: all 0.3s; }
+        #ending-screen .restart-btn:hover { background: rgba(200,180,130,0.2); border-color: rgba(200,180,130,0.8); box-shadow: 0 0 20px rgba(200,180,130,0.3); }
+        #entity-warning { position: fixed; top: 100px; left: 50%; transform: translateX(-50%); z-index: 25; color: rgba(255,50,50,0.9); font-size: 14px; letter-spacing: 3px; text-shadow: 0 0 15px rgba(255,0,0,0.6); opacity: 0; transition: opacity 0.3s; pointer-events: none; }
+        @media (max-width: 400px) { #joystick-zone { bottom: calc(25px + var(--safe-bottom)); left: 15px; width: 110px; height: 110px; } #joystick-base { width: 100px; height: 100px; } #joystick-thumb { width: 42px; height: 42px; } #look-zone { bottom: calc(25px + var(--safe-bottom)); right: 15px; width: 80px; height: 80px; } #look-icon { width: 48px; height: 48px; } #look-icon svg { width: 24px; height: 24px; } }
+        @media (min-width: 768px) { #joystick-zone { bottom: calc(50px + var(--safe-bottom)); left: 50px; width: 150px; height: 150px; } #joystick-base { width: 140px; height: 140px; } #joystick-thumb { width: 56px; height: 56px; } #look-zone { bottom: calc(50px + var(--safe-bottom)); right: 50px; width: 120px; height: 120px; } #look-icon { width: 70px; height: 70px; } #look-icon svg { width: 35px; height: 35px; } }
+    </style>
+</head>
+<body>
+    <div id="loading-screen"><div class="loader-text">正在进入后室...</div></div>
+    <div id="canvas-container"></div>
+    <div id="tunnel-ui"><div id="tunnel-title">未知区域 · 隧道尽头</div><div id="door-hint">靠近门以开门</div></div>
+    <div id="level-title">Level—0 &nbsp;&nbsp;教学关卡</div>
+    <div id="minimap-container"><canvas id="minimap"></canvas></div>
+    <div id="time-display">00:00:00</div>
+    <div id="fps-counter">FPS: --</div>
+    <div id="backrooms-door-ui"><div id="backrooms-door-hint" class="door-hint-style">靠近门以开门</div></div>
+    <div id="parking-door-ui"><div id="parking-door-hint" class="door-hint-style">找到出口门</div></div>
+    <div id="pipe-door-ui"><div id="pipe-door-hint" class="door-hint-style">找到通风口</div></div>
+    <div id="danger-bar"><div id="danger-fill"></div></div>
+    <div id="danger-text">实体接近中</div>
+    <div id="entity-warning">⚠ 检测到实体活动</div>
+    <div id="run-hint">跑！</div>
+    <div id="ending-screen">
+        <div class="ending-title">你 逃 出 来 了</div>
+        <div class="ending-text">你成功穿越了后室的层层迷宫<br>从黄色的无尽走廊到红色的死亡跑道<br>你活了下来...</div>
+        <button class="restart-btn" onclick="location.reload()">重新开始</button>
+    </div>
+    <div id="signal-glitch"><div class="scanlines"></div><div class="vignette"></div><div class="rgb-split" id="rgb-split"></div></div>
+    <div id="overlay">
+        <div id="info-bar"><div id="level-tag">后室 · Level 0</div><div id="hint-text">左摇杆移动 · 右滑视角</div></div>
+        <div id="joystick-zone"><div id="joystick-base"></div><div id="joystick-thumb"></div></div>
+        <div id="look-zone">
+            <div id="look-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="rgba(200,180,130,0.7)" stroke-width="1.5">
+                    <path d="M6 3h12v9H6z"/><path d="M12 12v3"/><path d="M9 15h6"/>
+                    <circle cx="12" cy="7.5" r="1.5" fill="rgba(200,180,130,0.4)" stroke="none"/>
+                </svg>
+            </div>
+        </div>
+    </div>
+    <div id="flicker-overlay"></div>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+    <script>
+
+    const CONFIG = {
+        textureSize: 1024, dustCount: 100, postScale: 0.75, maxPixelRatio: 2.0,
+        collisionRadius: 0.35, cellSize: 2.8, gridSize: 20
+    };
+
+    let currentPhase = 'tunnel';
+    let renderer, postScene, postCamera, postMaterial, renderTarget;
+    let joystickTouchId = null, lookTouchId = null;
+    let joystickDelta = { x: 0, z: 0 }, lookDelta = { x: 0, y: 0 };
+    let lastLookX = 0, lastLookY = 0, keys = {}, mouseLookActive = false;
+    let joystickCenterX = 0, joystickCenterY = 0, joystickMaxRadius = 50;
+    let lookZoneTouchStart = { x: 0, y: 0, time: 0, id: null, isClick: false };
+    let flashlightSystem = null;
+    let audioCtx = null, humStarted = false, audioNodes = {};
+    let container = document.getElementById('canvas-container');
+    let flickerOverlay = document.getElementById('flicker-overlay');
+    let activeTouches = new Map();
+    let scenes = {}, cameras = {}, clocks = {}, players = {}, levelData = {};
+
+    const perfMonitor = {
+        frames: 0, lastTime: performance.now(), fps: 60, lowPerfMode: false,
+        tick: function() {
+            this.frames++;
+            const now = performance.now();
+            if (now >= this.lastTime + 1000) {
+                this.fps = Math.round(this.frames * 1000 / (now - this.lastTime));
+                this.frames = 0; this.lastTime = now;
+                document.getElementById('fps-counter').textContent = 'FPS: ' + this.fps;
+                if (this.fps < 30 && !this.lowPerfMode) { this.lowPerfMode = true; setPostScale(0.5); }
+                else if (this.fps > 45 && this.lowPerfMode) { this.lowPerfMode = false; setPostScale(0.75); }
+            }
+        }
+    };
+
+    function updateJoystickCenter() {
+        const rect = document.getElementById('joystick-base').getBoundingClientRect();
+        joystickCenterX = rect.left + rect.width / 2;
+        joystickCenterY = rect.top + rect.height / 2;
+        joystickMaxRadius = rect.width / 2 - 10;
+    }
+
+    function getTouchZone(tx, ty) {
+        const jRect = document.getElementById('joystick-zone').getBoundingClientRect();
+        if (tx >= jRect.left && tx <= jRect.right && ty >= jRect.top && ty <= jRect.bottom) return 'joystick';
+        const lRect = document.getElementById('look-zone').getBoundingClientRect();
+        if (tx >= lRect.left && tx <= lRect.right && ty >= lRect.top && ty <= lRect.bottom) return 'look';
+        return tx < window.innerWidth / 2 ? 'joystick' : 'look';
+    }
+
+    document.addEventListener('touchstart', (e) => {
+        if (e.target.closest('.door-hint-style')) return;
+        e.preventDefault();
+        updateJoystickCenter();
+        for (const touch of e.changedTouches) {
+            const zone = getTouchZone(touch.clientX, touch.clientY);
+            const touchId = touch.identifier;
+            if (zone === 'joystick' && !Array.from(activeTouches.values()).some(t => t.zone === 'joystick')) {
+                activeTouches.set(touchId, { zone: 'joystick', startX: touch.clientX, startY: touch.clientY });
+                joystickTouchId = touchId;
+                document.getElementById('joystick-thumb').classList.add('active');
+            } else if (zone === 'look' && !Array.from(activeTouches.values()).some(t => t.zone === 'look')) {
+                activeTouches.set(touchId, { zone: 'look', startX: touch.clientX, startY: touch.clientY });
+                lookTouchId = touchId;
+                lookZoneTouchStart = { x: touch.clientX, y: touch.clientY, time: Date.now(), id: touchId, isClick: true };
+                lastLookX = touch.clientX; lastLookY = touch.clientY;
+                lookDelta = { x: 0, y: 0 };
+            }
+        }
+    }, { passive: false });
+
+    document.addEventListener('touchmove', (e) => {
+        if (e.target.closest('.door-hint-style')) return;
+        e.preventDefault();
+        for (const touch of e.changedTouches) {
+            const touchId = touch.identifier;
+            const touchData = activeTouches.get(touchId);
+            if (!touchData) continue;
+            if (touchData.zone === 'joystick' && touchId === joystickTouchId) {
+                const dx = touch.clientX - joystickCenterX, dy = touch.clientY - joystickCenterY;
+                const dist = Math.sqrt(dx*dx + dy*dy);
+                const clampedDist = Math.min(dist, joystickMaxRadius);
+                const angle = Math.atan2(dy, dx);
+                const cdx = Math.cos(angle) * clampedDist, cdy = Math.sin(angle) * clampedDist;
+                joystickDelta.x = cdx / joystickMaxRadius;
+                joystickDelta.z = -cdy / joystickMaxRadius;
+                document.getElementById('joystick-thumb').style.transform = `translate(calc(-50% + ${cdx}px), calc(-50% + ${cdy}px))`;
+            }
+            if (touchData.zone === 'look' && touchId === lookTouchId) {
+                if (lookZoneTouchStart.isClick && touchId === lookZoneTouchStart.id) {
+                    const dx = touch.clientX - lookZoneTouchStart.x, dy = touch.clientY - lookZoneTouchStart.y;
+                    if (Math.sqrt(dx*dx + dy*dy) > 20) lookZoneTouchStart.isClick = false;
+                }
+                lookDelta.x = touch.clientX - lastLookX;
+                lookDelta.y = touch.clientY - lastLookY;
+                lastLookX = touch.clientX; lastLookY = touch.clientY;
+            }
+        }
+    }, { passive: false });
+
+    document.addEventListener('touchend', (e) => {
+        for (const touch of e.changedTouches) {
+            const touchId = touch.identifier;
+            const touchData = activeTouches.get(touchId);
+            if (!touchData) continue;
+            if (touchData.zone === 'joystick' && touchId === joystickTouchId) {
+                joystickTouchId = null; joystickDelta.x = 0; joystickDelta.z = 0;
+                document.getElementById('joystick-thumb').classList.remove('active');
+                document.getElementById('joystick-thumb').style.transform = 'translate(-50%, -50%)';
+            }
+            if (touchData.zone === 'look' && touchId === lookTouchId) {
+                if (touchId === lookZoneTouchStart.id && lookZoneTouchStart.isClick) {
+                    if (Date.now() - lookZoneTouchStart.time < 250 && flashlightSystem) flashlightSystem.toggle();
+                }
+                lookTouchId = null; lookDelta.x = 0; lookDelta.y = 0; lookZoneTouchStart.isClick = false;
+            }
+            activeTouches.delete(touchId);
+        }
+    });
+
+    document.addEventListener('touchcancel', (e) => {
+        for (const touch of e.changedTouches) {
+            const touchId = touch.identifier;
+            const touchData = activeTouches.get(touchId);
+            if (!touchData) continue;
+            if (touchData.zone === 'joystick' && touchId === joystickTouchId) {
+                joystickTouchId = null; joystickDelta.x = 0; joystickDelta.z = 0;
+                document.getElementById('joystick-thumb').classList.remove('active');
+                document.getElementById('joystick-thumb').style.transform = 'translate(-50%, -50%)';
+            }
+            if (touchData.zone === 'look' && touchId === lookTouchId) {
+                lookTouchId = null; lookDelta.x = 0; lookDelta.y = 0; lookZoneTouchStart.isClick = false;
+            }
+            activeTouches.delete(touchId);
+        }
+    });
+
+    document.addEventListener('keydown', (e) => { keys[e.key.toLowerCase()] = true; });
+    document.addEventListener('keyup', (e) => { keys[e.key.toLowerCase()] = false; });
+    document.addEventListener('mousedown', (e) => {
+        if (e.button === 0 && getTouchZone(e.clientX, e.clientY) === 'look') {
+            const lzRect = document.getElementById('look-zone').getBoundingClientRect();
+            if (e.clientX >= lzRect.left && e.clientX <= lzRect.right && e.clientY >= lzRect.top && e.clientY <= lzRect.bottom) return;
+            mouseLookActive = true; lastLookX = e.clientX; lastLookY = e.clientY;
+        }
+    });
+    document.addEventListener('mousemove', (e) => {
+        if (mouseLookActive) { lookDelta.x = e.clientX - lastLookX; lookDelta.y = e.clientY - lastLookY; lastLookX = e.clientX; lastLookY = e.clientY; }
+    });
+    document.addEventListener('mouseup', () => { mouseLookActive = false; lookDelta.x = 0; lookDelta.y = 0; });
+    document.getElementById('look-zone').addEventListener('click', (e) => { e.stopPropagation(); if (flashlightSystem) flashlightSystem.toggle(); });
+    window.addEventListener('resize', updateJoystickCenter);
+    window.addEventListener('orientationchange', () => setTimeout(updateJoystickCenter, 300));
+
+    function initAudio() {
+        if (humStarted) return;
+        try {
+            audioCtx = new(window.AudioContext || window.webkitAudioContext)();
+            const masterGain = audioCtx.createGain();
+            masterGain.gain.value = 0.04; masterGain.connect(audioCtx.destination);
+            const osc1 = audioCtx.createOscillator(); osc1.type = 'sawtooth'; osc1.frequency.value = 118;
+            const gain1 = audioCtx.createGain(); gain1.gain.value = 0.03; osc1.connect(gain1); gain1.connect(masterGain);
+            const osc2 = audioCtx.createOscillator(); osc2.type = 'sine'; osc2.frequency.value = 236;
+            const gain2 = audioCtx.createGain(); gain2.gain.value = 0.015; osc2.connect(gain2); gain2.connect(masterGain);
+            const osc3 = audioCtx.createOscillator(); osc3.type = 'sine'; osc3.frequency.value = 55;
+            const gain3 = audioCtx.createGain(); gain3.gain.value = 0.02; osc3.connect(gain3); gain3.connect(masterGain);
+            osc1.start(); osc2.start(); osc3.start(); humStarted = true;
+            audioNodes = { ctx: audioCtx, osc1, osc2, osc3, gain1, gain2, gain3, masterGain };
+        } catch(e) { console.log('音频初始化失败:', e); }
+    }
+    function updateAudio(time) {
+        if (!humStarted || !audioNodes.ctx) return;
+        const now = Math.floor(time * 10);
+        if (audioNodes._last === now) return; audioNodes._last = now;
+        const wobble = Math.sin(time * 0.7) * 1.5 + Math.sin(time * 1.3) * 1.0;
+        audioNodes.osc1.frequency.setValueAtTime(118 + wobble, audioNodes.ctx.currentTime);
+        const gw = 1 + Math.sin(time * 0.4) * 0.15 + Math.sin(time * 1.1) * 0.08;
+        audioNodes.gain1.gain.setValueAtTime(0.03 * gw, audioNodes.ctx.currentTime);
+    }
+    function playAlertSound() {
+        if (!audioCtx) return;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'square'; osc.frequency.value = 440;
+        gain.gain.setValueAtTime(0.05, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
+        osc.connect(gain); gain.connect(audioCtx.destination);
+        osc.start(); osc.stop(audioCtx.currentTime + 0.3);
+    }
+
+    function initPostProcessing(w, h) {
+        const scale = CONFIG.postScale;
+        const rw = Math.floor(w * scale), rh = Math.floor(h * scale);
+        if (renderTarget) renderTarget.dispose();
+        renderTarget = new THREE.WebGLRenderTarget(rw, rh, { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, format: THREE.RGBAFormat });
+        if (!postScene) {
+            postScene = new THREE.Scene();
+            postCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+            postMaterial = new THREE.ShaderMaterial({
+                uniforms: { tDiffuse: { value: renderTarget.texture }, uTime: { value: 0 }, uDistortion: { value: 0.0 }, uFlicker: { value: 0.0 }, uRGBShift: { value: 0.0 } },
+                vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`,
+                fragmentShader: `
+                    precision mediump float;
+                    uniform sampler2D tDiffuse; uniform float uTime, uDistortion, uFlicker, uRGBShift;
+                    varying vec2 vUv;
+                    float rand(vec2 co) { return fract(sin(dot(co.xy, vec2(12.9898,78.233))) * 43758.5453); }
+                    void main() {
+                        vec2 uv = vUv;
+                        float jitter = uFlicker * 0.01;
+                        uv += (vec2(rand(uv+uTime), rand(uv+uTime+1.0)) - 0.5) * jitter;
+                        float shift = uRGBShift * 0.015;
+                        float r = texture2D(tDiffuse, uv + vec2(shift, 0.0)).r;
+                        float g = texture2D(tDiffuse, uv).g;
+                        float b = texture2D(tDiffuse, uv - vec2(shift, 0.0)).b;
+                        vec3 color = vec3(r, g, b);
+                        float scanline = sin(uv.y * 400.0 + uTime * 6.0) * 0.03 * uFlicker;
+                        color -= scanline;
+                        float bar = step(0.96, rand(vec2(floor(uTime*4.0), floor(uv.y*15.0))));
+                        color += bar * 0.1 * uFlicker;
+                        float noise = rand(uv * uTime * 15.0) * 0.08 * uFlicker;
+                        color += noise;
+                        float flicker = 1.0 - uFlicker * 0.15 * (sin(uTime*15.0)*0.5+0.5);
+                        color *= flicker;
+                        gl_FragColor = vec4(color, 1.0);
+                    }`
+            });
+            postScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), postMaterial));
+        } else { postMaterial.uniforms.tDiffuse.value = renderTarget.texture; }
+    }
+    function setPostScale(scale) {
+        CONFIG.postScale = scale;
+        if (renderTarget && renderer) renderTarget.setSize(Math.floor(window.innerWidth * scale), Math.floor(window.innerHeight * scale));
+    }
+
+    function showTitle(text) {
+        const el = document.getElementById('level-title');
+        el.textContent = text; el.classList.add('visible');
+        setTimeout(() => el.classList.remove('visible'), 2500);
+    }
+    function updateTime() {
+        const el = document.getElementById('time-display');
+        if (el) el.textContent = new Date().toLocaleTimeString('zh-CN', { hour12: false });
+    }
+    setInterval(updateTime, 1000);
+
+    function createNoiseTexture(baseColor, noiseAmt, spots) {
+        const size = CONFIG.textureSize;
+        const canvas = document.createElement('canvas');
+        canvas.width = size; canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = baseColor; ctx.fillRect(0, 0, size, size);
+        const imgData = ctx.getImageData(0, 0, size, size);
+        for (let i = 0; i < imgData.data.length; i += 4) {
+            const n = (Math.random() - 0.5) * noiseAmt;
+            imgData.data[i] = Math.min(255, Math.max(0, imgData.data[i] + n));
+            imgData.data[i+1] = Math.min(255, Math.max(0, imgData.data[i+1] + n));
+            imgData.data[i+2] = Math.min(255, Math.max(0, imgData.data[i+2] + n));
+        }
+        ctx.putImageData(imgData, 0, 0);
+        for (let s = 0; s < spots; s++) {
+            const x = Math.random() * size, y = Math.random() * size, r = 15 + Math.random() * 50;
+            const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+            g.addColorStop(0, 'rgba(35,35,35,0.3)'); g.addColorStop(1, 'rgba(100,100,100,0)');
+            ctx.fillStyle = g; ctx.fillRect(x-r, y-r, r*2, r*2);
+        }
+        const tex = new THREE.CanvasTexture(canvas);
+        tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping;
+        tex.colorSpace = THREE.SRGBColorSpace; tex.generateMipmaps = true;
+        tex.minFilter = THREE.LinearMipmapLinearFilter;
+        return tex;
+    }
+
+    function createWallTexture() {
+        const size = CONFIG.textureSize, canvas = document.createElement('canvas');
+        canvas.width = size; canvas.height = size; const ctx = canvas.getContext('2d');
+        const br = 210 + Math.floor(Math.random()*15), bg = 195 + Math.floor(Math.random()*15), bb = 150 + Math.floor(Math.random()*20);
+        ctx.fillStyle = 'rgb('+br+','+bg+','+bb+')'; ctx.fillRect(0,0,size,size);
+        const imgData = ctx.getImageData(0,0,size,size);
+        for (let i=0; i<imgData.data.length; i+=4) {
+            const n = (Math.random()-0.5)*18;
+            imgData.data[i] = Math.min(255, Math.max(0, imgData.data[i]+n));
+            imgData.data[i+1] = Math.min(255, Math.max(0, imgData.data[i+1]+n));
+            imgData.data[i+2] = Math.min(255, Math.max(0, imgData.data[i+2]+n-2));
+        }
+        ctx.putImageData(imgData, 0, 0);
+        ctx.strokeStyle = 'rgba(160,140,100,0.25)'; ctx.lineWidth = 2;
+        const seamY = size * 0.55 + (Math.random()-0.5)*20;
+        ctx.beginPath(); ctx.moveTo(0, seamY); ctx.lineTo(size, seamY); ctx.stroke();
+        ctx.strokeStyle = 'rgba(155,135,95,0.15)'; ctx.lineWidth = 1.5;
+        const seamY2 = size * 0.82 + (Math.random()-0.5)*16;
+        ctx.beginPath(); ctx.moveTo(0, seamY2); ctx.lineTo(size, seamY2); ctx.stroke();
+        for (let s=0; s<40; s++) {
+            const sx = Math.random()*size, sy = Math.random()*size, sr = 5+Math.random()*40;
+            const g = ctx.createRadialGradient(sx,sy,0,sx,sy,sr);
+            g.addColorStop(0,'rgba(140,120,80,0.12)'); g.addColorStop(0.5,'rgba(160,140,100,0.06)'); g.addColorStop(1,'rgba(220,200,160,0)');
+            ctx.fillStyle = g; ctx.fillRect(sx-sr, sy-sr, sr*2, sr*2);
+        }
+        const tex = new THREE.CanvasTexture(canvas);
+        tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+        tex.magFilter = THREE.LinearFilter; tex.minFilter = THREE.LinearMipmapLinearFilter;
+        tex.generateMipmaps = true; tex.colorSpace = THREE.SRGBColorSpace;
+        return tex;
+    }
+
+    function createFloorTexture() {
+        const size = CONFIG.textureSize, canvas = document.createElement('canvas');
+        canvas.width = size; canvas.height = size; const ctx = canvas.getContext('2d');
+        const br = 200+Math.floor(Math.random()*15), bg = 185+Math.floor(Math.random()*12), bb = 150+Math.floor(Math.random()*18);
+        ctx.fillStyle = 'rgb('+br+','+bg+','+bb+')'; ctx.fillRect(0,0,size,size);
+        const imgData = ctx.getImageData(0,0,size,size);
+        for (let i=0; i<imgData.data.length; i+=4) {
+            const n = (Math.random()-0.5)*22;
+            imgData.data[i] = Math.min(255, Math.max(0, imgData.data[i]+n));
+            imgData.data[i+1] = Math.min(255, Math.max(0, imgData.data[i+1]+n));
+            imgData.data[i+2] = Math.min(255, Math.max(0, imgData.data[i+2]+n));
+        }
+        ctx.putImageData(imgData, 0, 0);
+        for (let s=0; s<30; s++) {
+            const sx = Math.random()*size, sy = Math.random()*size, sr = 3+Math.random()*20;
+            const g = ctx.createRadialGradient(sx,sy,0,sx,sy,sr);
+            g.addColorStop(0,'rgba(120,110,90,0.2)'); g.addColorStop(0.6,'rgba(150,135,110,0.08)'); g.addColorStop(1,'rgba(200,185,150,0)');
+            ctx.fillStyle = g; ctx.fillRect(sx-sr, sy-sr, sr*2, sr*2);
+        }
+        const tex = new THREE.CanvasTexture(canvas);
+        tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.repeat.set(2,2);
+        tex.magFilter = THREE.LinearFilter; tex.minFilter = THREE.LinearMipmapLinearFilter;
+        tex.generateMipmaps = true; tex.colorSpace = THREE.SRGBColorSpace;
+        return tex;
+    }
+
+    function createCeilingTexture() {
+        const size = 512, canvas = document.createElement('canvas');
+        canvas.width = size; canvas.height = size; const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#f0ece0'; ctx.fillRect(0,0,size,size);
+        const imgData = ctx.getImageData(0,0,size,size);
+        for (let i=0; i<imgData.data.length; i+=4) {
+            const n = (Math.random()-0.5)*8;
+            imgData.data[i] = Math.min(255, Math.max(0, imgData.data[i]+n));
+            imgData.data[i+1] = Math.min(255, Math.max(0, imgData.data[i+1]+n));
+            imgData.data[i+2] = Math.min(255, Math.max(0, imgData.data[i+2]+n));
+        }
+        ctx.putImageData(imgData, 0, 0);
+        for (let s=0; s<20; s++) {
+            const sx = Math.random()*size, sy = Math.random()*size, sr = 10+Math.random()*40;
+            const g = ctx.createRadialGradient(sx,sy,0,sx,sy,sr);
+            g.addColorStop(0,'rgba(200,190,160,0.15)'); g.addColorStop(1,'rgba(240,235,220,0)');
+            ctx.fillStyle = g; ctx.fillRect(sx-sr, sy-sr, sr*2, sr*2);
+        }
+        const tex = new THREE.CanvasTexture(canvas);
+        tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.repeat.set(4,4);
+        tex.magFilter = THREE.LinearFilter; tex.minFilter = THREE.LinearMipmapLinearFilter;
+        tex.generateMipmaps = true; tex.colorSpace = THREE.SRGBColorSpace;
+        return tex;
+    }
+
+    function createDoorMesh() {
+        const group = new THREE.Group();
+        const frameMat = new THREE.MeshStandardMaterial({ color: '#5a5a5a', metalness: 0.75, roughness: 0.28 });
+        group.add(new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.18, 0.28), frameMat).translateY(2.85));
+        group.add(new THREE.Mesh(new THREE.BoxGeometry(0.16, 3.0, 0.28), frameMat).translateX(-1.17).translateY(1.5));
+        group.add(new THREE.Mesh(new THREE.BoxGeometry(0.16, 3.0, 0.28), frameMat).translateX(1.17).translateY(1.5));
+        const doorMat = new THREE.MeshStandardMaterial({ color: '#656565', metalness: 0.65, roughness: 0.35 });
+        const leftDoor = new THREE.Group(); leftDoor.position.set(-1.08, 0, 0.14);
+        leftDoor.add(new THREE.Mesh(new THREE.BoxGeometry(1.05, 2.7, 0.1), doorMat).translateX(0.525).translateY(1.35));
+        group.add(leftDoor);
+        const rightDoor = new THREE.Group(); rightDoor.position.set(1.08, 0, 0.14);
+        rightDoor.add(new THREE.Mesh(new THREE.BoxGeometry(1.05, 2.7, 0.1), doorMat).translateX(-0.525).translateY(1.35));
+        group.add(rightDoor);
+        const gapLight = new THREE.PointLight('#ffffff', 2, 4, 1);
+        gapLight.position.set(0, 1.5, -0.3); group.add(gapLight);
+        return { group, leftDoor, rightDoor, gapLight };
+    }
+
+    function initRenderer() {
+        renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, CONFIG.maxPixelRatio));
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.6;
+        renderer.outputColorSpace = THREE.SRGBColorSpace;
+        container.appendChild(renderer.domElement);
+        initPostProcessing(window.innerWidth, window.innerHeight);
+    }
+
+    // ==================== 隧道场景 ====================
+    let tunnelScene, tunnelCamera, tunnelPlayer = { x: 0, y: 1.6, z: 8, yaw: 0, pitch: 0 };
+    let isDoorOpen = false, isFalling = false, fallTime = 0, doorOpenTime = 0, shouldTransition = false;
+    let doorGroup, leftDoorGroup, rightDoorGroup, doorAnimStartPos = null;
+    const TUNNEL_W_HALF = 1.4, TUNNEL_Z_START = 8, TUNNEL_Z_END = -8.5, DOOR_POS = { x: 0, z: -9.5 };
+
+    function initTunnel() {
+        const w = window.innerWidth, h = window.innerHeight;
+        tunnelScene = new THREE.Scene();
+        tunnelScene.background = new THREE.Color('#2a2a2a');
+        tunnelScene.fog = new THREE.FogExp2('#2a2a2a', 0.05);
+        tunnelCamera = new THREE.PerspectiveCamera(75, w/h, 0.1, 50);
+        tunnelCamera.position.set(tunnelPlayer.x, tunnelPlayer.y, tunnelPlayer.z);
+        tunnelCamera.rotation.order = 'YXZ';
+
+        const TUNNEL_LEN = 20, TUNNEL_W = 3.6, TUNNEL_H = 3.2;
+        const tex = createNoiseTexture('#5a5a5a', 35, 60);
+        const floorTex = createNoiseTexture('#4a4a4a', 35, 60);
+
+        const floor = new THREE.Mesh(new THREE.PlaneGeometry(TUNNEL_W, TUNNEL_LEN), new THREE.MeshStandardMaterial({ map: floorTex, roughness: 0.92, metalness: 0.05, color: '#5a5a5a' }));
+        floor.rotation.x = -Math.PI/2; tunnelScene.add(floor);
+        const ceil = new THREE.Mesh(new THREE.PlaneGeometry(TUNNEL_W, TUNNEL_LEN), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.85, metalness: 0.1, color: '#656565' }));
+        ceil.rotation.x = Math.PI/2; ceil.position.y = TUNNEL_H; tunnelScene.add(ceil);
+        const wallMat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.88, metalness: 0.08, color: '#656565' });
+        const lw = new THREE.Mesh(new THREE.PlaneGeometry(TUNNEL_LEN, TUNNEL_H), wallMat);
+        lw.rotation.y = Math.PI/2; lw.position.set(-TUNNEL_W/2, TUNNEL_H/2, 0); tunnelScene.add(lw);
+        const rw = new THREE.Mesh(new THREE.PlaneGeometry(TUNNEL_LEN, TUNNEL_H), wallMat);
+        rw.rotation.y = -Math.PI/2; rw.position.set(TUNNEL_W/2, TUNNEL_H/2, 0); tunnelScene.add(rw);
+
+        const pipeMat = new THREE.MeshStandardMaterial({ color: '#6a6a6a', metalness: 0.85, roughness: 0.25 });
+        const p1 = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, TUNNEL_LEN, 16), pipeMat);
+        p1.rotation.x = Math.PI/2; p1.position.set(-1.1, 2.3, 0); tunnelScene.add(p1);
+        const p2 = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, TUNNEL_LEN, 12), pipeMat);
+        p2.rotation.x = Math.PI/2; p2.position.set(1.2, 2.6, 0); tunnelScene.add(p2);
+
+        const line = new THREE.Mesh(new THREE.PlaneGeometry(0.12, TUNNEL_LEN), new THREE.MeshBasicMaterial({ color: '#d8c050' }));
+        line.rotation.x = -Math.PI/2; line.position.set(0, 0.015, 0); tunnelScene.add(line);
+
+        const lc = 10, sp = TUNNEL_LEN / lc, zs = -TUNNEL_LEN/2 + sp/2;
+        for (let i=0; i<lc; i++) {
+            const z = zs + i*sp;
+            createTunnelLight(-0.9, TUNNEL_H-0.05, z);
+            createTunnelLight(0.9, TUNNEL_H-0.05, z);
+        }
+
+        tunnelScene.add(new THREE.AmbientLight('#d8d0b0', 0.6));
+        tunnelScene.add(new THREE.HemisphereLight('#aaaaaa', '#222222', 0.5));
+        createTunnelDoor();
+
+        document.getElementById('tunnel-ui').style.display = 'flex';
+        document.getElementById('info-bar').style.display = 'none';
+        document.getElementById('door-hint').classList.remove('active');
+        document.getElementById('door-hint').style.opacity = '0.3';
+
+        clocks.tunnel = new THREE.Clock();
+        clocks.tunnel.start();
+        currentPhase = 'tunnel';
+    }
+
+    function createTunnelLight(x, y, z) {
+        const fixture = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.06, 0.22), new THREE.MeshBasicMaterial({ color: '#fff8e0' }));
+        fixture.position.set(x, y, z); tunnelScene.add(fixture);
+        const light = new THREE.PointLight('#fff0c8', 12, 10, 1.5);
+        light.position.set(x, y-0.15, z); tunnelScene.add(light);
+        const glow = new THREE.Mesh(new THREE.PlaneGeometry(0.8, 0.8), new THREE.MeshBasicMaterial({ color: '#fff8e0', transparent: true, opacity: 0.18, side: THREE.DoubleSide }));
+        glow.rotation.x = Math.PI/2; glow.position.set(x, y-0.1, z); tunnelScene.add(glow);
+    }
+
+    function createTunnelDoor() {
+        doorGroup = new THREE.Group(); doorGroup.position.set(0, 0, -9.5);
+        const frameMat = new THREE.MeshStandardMaterial({ color: '#5a5a5a', metalness: 0.75, roughness: 0.28 });
+        doorGroup.add(new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.18, 0.28), frameMat).translateY(2.85));
+        doorGroup.add(new THREE.Mesh(new THREE.BoxGeometry(0.16, 3.0, 0.28), frameMat).translateX(-1.17).translateY(1.5));
+        doorGroup.add(new THREE.Mesh(new THREE.BoxGeometry(0.16, 3.0, 0.28), frameMat).translateX(1.17).translateY(1.5));
+        const doorMat = new THREE.MeshStandardMaterial({ color: '#656565', metalness: 0.65, roughness: 0.35 });
+        const winMat = new THREE.MeshPhysicalMaterial({ color: '#7799aa', metalness: 0.1, roughness: 0.15, transparent: true, opacity: 0.35, transmission: 0.5 });
+        const handleMat = new THREE.MeshStandardMaterial({ color: '#c8b87d', metalness: 0.95, roughness: 0.15 });
+
+        leftDoorGroup = new THREE.Group(); leftDoorGroup.position.set(-1.08, 0, 0.14);
+        leftDoorGroup.add(new THREE.Mesh(new THREE.BoxGeometry(1.05, 2.7, 0.1), doorMat).translateX(0.525).translateY(1.35));
+        leftDoorGroup.add(new THREE.Mesh(new THREE.PlaneGeometry(0.55, 0.65), winMat).translateX(0.525).translateY(1.85).translateZ(0.06));
+        leftDoorGroup.add(new THREE.Mesh(new THREE.SphereGeometry(0.055, 16, 16), handleMat).translateX(0.9).translateY(1.35).translateZ(0.1));
+        doorGroup.add(leftDoorGroup);
+
+        rightDoorGroup = new THREE.Group(); rightDoorGroup.position.set(1.08, 0, 0.14);
+        rightDoorGroup.add(new THREE.Mesh(new THREE.BoxGeometry(1.05, 2.7, 0.1), doorMat).translateX(-0.525).translateY(1.35));
+        rightDoorGroup.add(new THREE.Mesh(new THREE.PlaneGeometry(0.55, 0.65), winMat).translateX(-0.525).translateY(1.85).translateZ(0.06));
+        rightDoorGroup.add(new THREE.Mesh(new THREE.SphereGeometry(0.055, 16, 16), handleMat).translateX(-0.9).translateY(1.35).translateZ(0.1));
+        doorGroup.add(rightDoorGroup);
+
+        const gapLight = new THREE.PointLight('#ffffff', 3, 4, 1);
+        gapLight.position.set(0, 1.5, -0.3); doorGroup.add(gapLight);
+        tunnelScene.add(doorGroup);
+    }
+
+    function tryOpenDoor() {
+        if (isDoorOpen || currentPhase !== 'tunnel') return;
+        const dist = Math.sqrt((tunnelPlayer.x - DOOR_POS.x)**2 + (tunnelPlayer.z - DOOR_POS.z)**2);
+        if (dist >= 2.5) return;
+        isDoorOpen = true;
+        doorAnimStartPos = { x: tunnelPlayer.x, y: tunnelPlayer.y, z: tunnelPlayer.z, yaw: tunnelPlayer.yaw, pitch: tunnelPlayer.pitch };
+        doorOpenTime = clocks.tunnel.getElapsedTime();
+        document.getElementById('door-hint').classList.remove('active');
+        document.getElementById('door-hint').style.opacity = '0';
+    }
+
+    document.getElementById('door-hint').addEventListener('click', (e) => { e.stopPropagation(); tryOpenDoor(); });
+    document.getElementById('door-hint').addEventListener('touchstart', (e) => { e.preventDefault(); e.stopPropagation(); tryOpenDoor(); }, { passive: false });
+    document.addEventListener('click', (e) => { if (currentPhase === 'tunnel' && !isDoorOpen && !e.target.closest('#door-hint')) tryOpenDoor(); });
+
+    function startFalling() {
+        isFalling = true; fallTime = 0; currentPhase = 'falling';
+        document.getElementById('signal-glitch').style.opacity = '1';
+        document.getElementById('rgb-split').style.opacity = '1';
+    }
+
+    function updateFalling(delta, time) {
+        const duration = 2.8, t = Math.min(time / duration, 1.0), easeIn = t*t*(3-2*t);
+        tunnelCamera.position.y = 6.0 - easeIn * (6.0 - 1.6);
+        tunnelCamera.position.z = -10 - easeIn * 2;
+        const shake = (1.0 - t) * 0.25 + 0.05;
+        tunnelCamera.position.x = Math.sin(time * 9.0) * shake * 0.4;
+        tunnelCamera.rotation.z = Math.sin(time * 7.0) * shake * 0.6;
+        tunnelCamera.rotation.x = Math.sin(time * 5.0) * shake * 0.3 - 0.2 * t;
+        let distortion, flicker;
+        if (t < 0.25) { distortion = (t/0.25)*0.9; flicker = (t/0.25); }
+        else if (t < 0.75) { distortion = 0.9 + Math.sin(time*3.0)*0.15; flicker = 1.0; }
+        else { distortion = ((1.0-t)/0.25)*0.9; flicker = ((1.0-t)/0.25); }
+        postMaterial.uniforms.uDistortion.value = distortion;
+        postMaterial.uniforms.uRGBShift.value = distortion * 1.2;
+        postMaterial.uniforms.uFlicker.value = flicker;
+        container.style.filter = 'blur('+Math.sin(t*Math.PI)*3+'px) brightness('+(1.0+Math.sin(t*Math.PI)*0.3)+')';
+        if (t >= 1.0) shouldTransition = true;
+    }
+
+    function animateTunnel() {
+        if (currentPhase !== 'tunnel' && currentPhase !== 'falling') return;
+        requestAnimationFrame(animateTunnel);
+        if (document.hidden) return;
+        const delta = Math.min(clocks.tunnel.getDelta(), 0.1);
+        const time = clocks.tunnel.getElapsedTime();
+
+        if (currentPhase === 'tunnel' && !isDoorOpen) {
+            let moveX = joystickDelta.x, moveZ = joystickDelta.z;
+            if (keys['w'] || keys['arrowup']) moveZ = Math.max(moveZ, 0.85);
+            if (keys['s'] || keys['arrowdown']) moveZ = Math.min(moveZ, -0.7);
+            if (keys['a'] || keys['arrowleft']) moveX = Math.min(moveX, -0.8);
+            if (keys['d'] || keys['arrowright']) moveX = Math.max(moveX, 0.8);
+            const mag = Math.sqrt(moveX*moveX + moveZ*moveZ);
+            if (mag > 1.0) { moveX /= mag; moveZ /= mag; }
+
+            if (lookDelta.x !== 0 || lookDelta.y !== 0) {
+                tunnelPlayer.yaw -= lookDelta.x * 0.003;
+                tunnelPlayer.pitch -= lookDelta.y * 0.0025;
+                tunnelPlayer.pitch = Math.max(-0.55, Math.min(0.4, tunnelPlayer.pitch));
+                lookDelta.x = 0; lookDelta.y = 0;
+            }
+            const fx = -Math.sin(tunnelPlayer.yaw), fz = -Math.cos(tunnelPlayer.yaw);
+            const rx = Math.cos(tunnelPlayer.yaw), rz = -Math.sin(tunnelPlayer.yaw);
+            const speed = 3.2 * (mag > 0.7 ? 1.0 : (mag > 0.08 ? 0.6 : 0));
+            tunnelPlayer.x += (fx * moveZ + rx * moveX) * speed * delta;
+            tunnelPlayer.z += (fz * moveZ + rz * moveX) * speed * delta;
+            tunnelPlayer.x = Math.max(-TUNNEL_W_HALF, Math.min(TUNNEL_W_HALF, tunnelPlayer.x));
+            tunnelPlayer.z = Math.max(TUNNEL_Z_END, Math.min(TUNNEL_Z_START, tunnelPlayer.z));
+            tunnelCamera.position.set(tunnelPlayer.x, tunnelPlayer.y, tunnelPlayer.z);
+            tunnelCamera.rotation.y = tunnelPlayer.yaw;
+            tunnelCamera.rotation.x = tunnelPlayer.pitch;
+
+            const dist = Math.sqrt((tunnelPlayer.x - DOOR_POS.x)**2 + (tunnelPlayer.z - DOOR_POS.z)**2);
+            const hint = document.getElementById('door-hint');
+            if (dist < 2.5) { hint.textContent = '点击开门'; hint.classList.add('active'); }
+            else { hint.textContent = '靠近门以开门'; hint.classList.remove('active'); }
+        }
+
+        if (isDoorOpen && !isFalling) {
+            const dp = Math.min((time - doorOpenTime) / 1.2, 1.0);
+            leftDoorGroup.rotation.y = dp * Math.PI / 2.2;
+            rightDoorGroup.rotation.y = -dp * Math.PI / 2.2;
+            if (dp > 0.2 && doorAnimStartPos) {
+                const mp = Math.min((time - doorOpenTime - 0.2) / 1.8, 1.0);
+                const ease = mp*mp*(3-2*mp);
+                tunnelCamera.position.x = doorAnimStartPos.x * (1-ease);
+                tunnelCamera.position.y = doorAnimStartPos.y + Math.sin(ease*Math.PI)*0.15;
+                tunnelCamera.position.z = doorAnimStartPos.z * (1-ease) + (-10.5)*ease;
+                tunnelCamera.rotation.y = doorAnimStartPos.yaw * (1-ease);
+                tunnelCamera.rotation.x = doorAnimStartPos.pitch * (1-ease) + (-0.2)*ease;
+            }
+            if (dp >= 1.0 && tunnelCamera.position.z <= -9.0) startFalling();
+        }
+
+        if (isFalling) { fallTime += delta; updateFalling(delta, fallTime); }
+        if (shouldTransition) { transitionToLevel0(); return; }
+
+        renderer.setRenderTarget(renderTarget); renderer.render(tunnelScene, tunnelCamera); renderer.setRenderTarget(null);
+        postMaterial.uniforms.uTime.value = time;
+        renderer.render(postScene, postCamera);
+        perfMonitor.tick();
+    }
+
+    // ==================== Level 0（后室迷宫）====================
+    let level0Data = { mapGrid: [], wallMesh: null, lightMesh: null, lightData: [], dust: null, intro: { active: true, time: 0 }, door: null, doorPos: {x:0,z:0}, doorOpen: false, doorOpenTime: 0 };
+
+    function transitionToLevel0() {
+        currentPhase = 'level0';
+        isFalling = false; shouldTransition = false;
+        container.style.filter = 'none';
+        document.getElementById('signal-glitch').style.opacity = '0.35';
+        document.getElementById('rgb-split').style.opacity = '0.25';
+        document.getElementById('tunnel-ui').style.display = 'none';
+        document.getElementById('info-bar').style.display = 'block';
+        document.getElementById('level-tag').textContent = '后室 · Level 0';
+        document.getElementById('backrooms-door-ui').style.display = 'flex';
+        document.getElementById('minimap-container').style.display = 'block';
+        initLevel0();
+    }
+
+    function generateMap() {
+        const G = CONFIG.gridSize;
+        const grid = Array.from({length:G}, () => Array(G).fill(1));
+        const visited = Array.from({length:G}, () => Array(G).fill(false));
+        const stack = [];
+        const startR = Math.floor(G/2), startC = Math.floor(G/2);
+        function valid(r,c) { return r>=1 && r<G-1 && c>=1 && c<G-1; }
+        function carve(r,c) {
+            grid[r][c] = 0; visited[r][c] = true; stack.push({r,c});
+            while (stack.length > 0) {
+                const cur = stack[stack.length-1];
+                const neighbors = [];
+                const dirs = [{dr:-2,dc:0},{dr:2,dc:0},{dr:0,dc:-2},{dr:0,dc:2}];
+                for (const d of dirs) {
+                    const nr = cur.r+d.dr, nc = cur.c+d.dc;
+                    if (valid(nr,nc) && !visited[nr][nc]) neighbors.push({r:nr,c:nc,mr:cur.r+d.dr/2,mc:cur.c+d.dc/2});
+                }
+                if (neighbors.length > 0) {
+                    const ch = neighbors[Math.floor(Math.random()*neighbors.length)];
+                    grid[ch.mr][ch.mc] = 0; grid[ch.r][ch.c] = 0;
+                    visited[ch.r][ch.c] = true; visited[ch.mr][ch.mc] = true;
+                    stack.push({r:ch.r,c:ch.c});
+                } else stack.pop();
+            }
+        }
+        carve(startR, startC);
+        const extra = Math.floor(G*G*0.06);
+        for (let i=0; i<extra; i++) {
+            const r = 1+Math.floor(Math.random()*(G-2)), c = 1+Math.floor(Math.random()*(G-2));
+            if (grid[r][c] === 1) {
+                let adj = 0; const dirs = [{dr:-1,dc:0},{dr:1,dc:0},{dr:0,dc:-1},{dr:0,dc:1}];
+                for (const d of dirs) { const ar=r+d.dr, ac=c+d.dc; if (valid(ar,ac) && grid[ar][ac]===0) adj++; }
+                if (adj >= 2) grid[r][c] = 0;
+            }
+        }
+        for (let r=0; r<G; r++) { grid[r][0]=1; grid[r][G-1]=1; }
+        for (let c=0; c<G; c++) { grid[0][c]=1; grid[G-1][c]=1; }
+        grid[startR][startC] = 0; grid[startR][startC+1] = 0; grid[startR+1][startC] = 0;
+        return grid;
+    }
+
+    function initLevel0() {
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color('#c8b87d');
+        scene.fog = new THREE.FogExp2('#c8b87d', 0.00018);
+        scenes.level0 = scene;
+
+        const camera = new THREE.PerspectiveCamera(73, window.innerWidth/window.innerHeight, 0.15, 35);
+        camera.position.set(0, 1.6, 0); camera.rotation.order = 'YXZ';
+        cameras.level0 = camera;
+
+        const flash = {
+            isOn: false, light: null, target: null, mesh: null,
+            toggle: function() {
+                this.isOn = !this.isOn;
+                const icon = document.getElementById('look-icon');
+                if (this.isOn) icon.classList.add('flashlight-on'); else icon.classList.remove('flashlight-on');
+            }
+        };
+        flash.light = new THREE.SpotLight('#fff8e0', 0, 30, Math.PI/5, 0.7, 1.2);
+        flash.light.position.set(0, 1.6, 0);
+        flash.target = new THREE.Object3D(); flash.target.position.set(0, 1.6, -1);
+        scene.add(flash.light); scene.add(flash.target); flash.light.target = flash.target;
+        flash.mesh = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.05, 0.2, 8), new THREE.MeshStandardMaterial({ color: '#2a2a2a', metalness: 0.7, roughness: 0.4 }));
+        flash.mesh.rotation.x = Math.PI/2; flash.mesh.visible = false; scene.add(flash.mesh);
+        flashlightSystem = flash;
+
+        const wallTex = createWallTexture(), floorTex = createFloorTexture(), ceilTex = createCeilingTexture();
+        const wallMat = new THREE.MeshStandardMaterial({ map: wallTex, roughness: 0.85, metalness: 0.02, color: new THREE.Color('#e0d4b0') });
+        const floorMat = new THREE.MeshStandardMaterial({ map: floorTex, roughness: 0.7, metalness: 0.05, color: new THREE.Color('#d8c8a0') });
+        const ceilMat = new THREE.MeshStandardMaterial({ map: ceilTex, roughness: 0.9, metalness: 0.01, color: new THREE.Color('#f5f0e8') });
+
+        const G = CONFIG.gridSize, CS = CONFIG.cellSize, WH = 3.0, OFF = (G*CS)/2;
+        const grid = generateMap(); level0Data.mapGrid = grid;
+
+        const floor = new THREE.Mesh(new THREE.PlaneGeometry(G*CS, G*CS), floorMat);
+        floor.rotation.x = -Math.PI/2; scene.add(floor);
+        const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(G*CS, G*CS), ceilMat);
+        ceiling.rotation.x = Math.PI/2; ceiling.position.y = WH; scene.add(ceiling);
+
+        let wallCount = 0;
+        for (let r=0; r<G; r++) for (let c=0; c<G; c++) if (grid[r][c] === 1) wallCount++;
+        if (wallCount > 0) {
+            const wGeo = new THREE.BoxGeometry(CS*0.98, WH, CS*0.98);
+            const wMesh = new THREE.InstancedMesh(wGeo, wallMat, wallCount);
+            const dummy = new THREE.Object3D(); let idx = 0;
+            for (let r=0; r<G; r++) {
+                for (let c=0; c<G; c++) {
+                    if (grid[r][c] === 1) {
+                        dummy.position.set(c*CS-OFF+CS/2, WH/2, r*CS-OFF+CS/2);
+                        dummy.updateMatrix(); wMesh.setMatrixAt(idx++, dummy.matrix);
+                    }
+                }
+            }
+            wMesh.instanceMatrix.needsUpdate = true;
+            scene.add(wMesh); level0Data.wallMesh = wMesh;
+        }
+
+        const lGeo = new THREE.BoxGeometry(1.3, 0.06, 0.22);
+        const lMat = new THREE.MeshBasicMaterial({ color: '#ffffff' });
+        const lMesh = new THREE.InstancedMesh(lGeo, lMat, G*G);
+        const lData = []; let lIdx = 0;
+        for (let r=0; r<G; r++) {
+            for (let c=0; c<G; c++) {
+                const lx = c*CS-OFF+CS/2, lz = r*CS-OFF+CS/2, ly = WH-0.08;
+                const m = new THREE.Matrix4();
+                m.compose(new THREE.Vector3(lx,ly,lz), new THREE.Quaternion().identity(), new THREE.Vector3(1,1,1));
+                lMesh.setMatrixAt(lIdx, m);
+                const rv = Math.random(); let type = 'normal';
+                if (rv < 0.03) type = 'dead'; else if (rv < 0.14) type = 'flicker'; else if (rv < 0.20) type = 'dim';
+                const bc = new THREE.Color('#ffffff');
+                if (type === 'dead') bc.set('#5a5040'); else if (type === 'dim') bc.set('#f0e0b0');
+                lMesh.setColorAt(lIdx, bc);
+                lData.push({ index: lIdx, type, baseColor: bc.clone(), flickerTimer: Math.random()*Math.PI*2, flickerSpeed: 0.3+Math.random()*2.5, flickerIntensity: 0.3+Math.random()*0.7 });
+                lIdx++;
+            }
+        }
+        lMesh.count = lIdx; lMesh.instanceColor.needsUpdate = true;
+        scene.add(lMesh); level0Data.lightMesh = lMesh; level0Data.lightData = lData;
+
+        scene.add(new THREE.AmbientLight('#f5ead0', 1.2));
+        const pLight = new THREE.PointLight('#fff8e8', 18, 14, 1.5); pLight.position.set(0, 2.2, 0); scene.add(pLight);
+        scene.add(new THREE.HemisphereLight('#e8dcc0', '#8a7a5a', 0.6));
+
+        const dGeo = new THREE.BufferGeometry();
+        const dPos = new Float32Array(CONFIG.dustCount * 3);
+        for (let i=0; i<CONFIG.dustCount; i++) {
+            dPos[i*3] = (Math.random()-0.5)*G*CS*0.8;
+            dPos[i*3+1] = 0.3 + Math.random()*(WH-0.5);
+            dPos[i*3+2] = (Math.random()-0.5)*G*CS*0.8;
+        }
+        dGeo.setAttribute('position', new THREE.BufferAttribute(dPos, 3));
+        const dMat = new THREE.PointsMaterial({ color: '#d8cfb0', size: 0.03, transparent: true, opacity: 0.5, depthWrite: false, sizeAttenuation: true });
+        const dust = new THREE.Points(dGeo, dMat); scene.add(dust); level0Data.dust = dust;
+
+        players.level0 = { position: new THREE.Vector3(0, 1.6, 0), yaw: 0, pitch: 0, velocityX: 0, velocityZ: 0, moveSpeed: 3.2, collisionRadius: 0.35, isMoving: false };
+        const startR = Math.floor(G/2), startC = Math.floor(G/2);
+        players.level0.position.x = startC*CS-OFF+CS/2;
+        players.level0.position.z = startR*CS-OFF+CS/2;
+        players.level0.yaw = Math.random() * Math.PI * 2;
+        camera.position.copy(players.level0.position);
+        camera.rotation.y = players.level0.yaw; camera.rotation.x = players.level0.pitch;
+
+        let attempts = 0, dr, dc;
+        const startX = startC*CS-OFF+CS/2, startZ = startR*CS-OFF+CS/2;
+        do {
+            dr = Math.floor(Math.random()*G); dc = Math.floor(Math.random()*G);
+            attempts++;
+        } while ((grid[dr][dc] !== 0 || Math.sqrt((dc*CS-OFF+CS/2-startX)**2 + (dr*CS-OFF+CS/2-startZ)**2) < 20) && attempts < 500);
+        level0Data.doorPos = { x: dc*CS-OFF+CS/2, z: dr*CS-OFF+CS/2, r: dr, c: dc };
+        const doorObj = createDoorMesh();
+        doorObj.group.position.set(level0Data.doorPos.x, 0, level0Data.doorPos.z);
+        scene.add(doorObj.group);
+        level0Data.door = doorObj;
+
+        clocks.level0 = new THREE.Clock();
+        level0Data.intro = { active: true, time: 0 };
+        animateLevel0();
+    }
+
+    function checkCollisionL0(x, z) {
+        const r = players.level0.collisionRadius;
+        const G = CONFIG.gridSize, CS = CONFIG.cellSize, OFF = (G*CS)/2;
+        const gx = Math.floor((x+OFF)/CS), gz = Math.floor((z+OFF)/CS);
+        const dirs = [[0,0],[-1,0],[1,0],[0,-1],[0,1]];
+        for (const [dgr, dgc] of dirs) {
+            const rIdx = gz+dgr, cIdx = gx+dgc;
+            if (rIdx>=0 && rIdx<G && cIdx>=0 && cIdx<G && level0Data.mapGrid[rIdx][cIdx] === 1) {
+                const wx = cIdx*CS-OFF+CS/2, wz = rIdx*CS-OFF+CS/2;
+                const hc = CS*0.49;
+                const cx = Math.max(wx-hc, Math.min(x, wx+hc));
+                const cz = Math.max(wz-hc, Math.min(z, wz+hc));
+                if ((x-cx)**2 + (z-cz)**2 < r*r) return true;
+            }
+        }
+        return false;
+    }
+
+    function resolveMoveL0(dx, dz) {
+        const cx = players.level0.position.x, cz = players.level0.position.z;
+        if (!checkCollisionL0(dx, dz)) return {x:dx, z:dz};
+        if (!checkCollisionL0(dx, cz)) return {x:dx, z:cz};
+        if (!checkCollisionL0(cx, dz)) return {x:cx, z:dz};
+        return {x:cx, z:cz};
+    }
+
+    let minimapSkip = 0;
+    function updateMinimap() {
+        minimapSkip++; if (minimapSkip % 3 !== 0) return;
+        const cvs = document.getElementById('minimap'), ctx = cvs.getContext('2d');
+        const size = 130; cvs.width = size; cvs.height = size;
+        const G = CONFIG.gridSize, CS = CONFIG.cellSize, OFF = (G*CS)/2;
+        const cellSize = size / 15;
+        const px = Math.floor((players.level0.position.x + OFF) / CS);
+        const pz = Math.floor((players.level0.position.z + OFF) / CS);
+        ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillRect(0, 0, size, size);
+        const range = 7;
+        for (let r=-range; r<=range; r++) {
+            for (let c=-range; c<=range; c++) {
+                const gr = pz+r, gc = px+c;
+                if (gr>=0 && gr<G && gc>=0 && gc<G) {
+                    const sx = size/2 + c*cellSize, sy = size/2 + r*cellSize;
+                    ctx.fillStyle = level0Data.mapGrid[gr][gc] === 1 ? '#4a4030' : '#c8b87d';
+                    ctx.fillRect(sx, sy, cellSize-0.5, cellSize-0.5);
+                }
+            }
+        }
+        const dpx = level0Data.doorPos.c, dpz = level0Data.doorPos.r;
+        const ddx = dpx - px, ddz = dpz - pz;
+        if (Math.abs(ddx) <= range && Math.abs(ddz) <= range) {
+            ctx.fillStyle = '#00ff00'; ctx.beginPath();
+            ctx.arc(size/2+ddx*cellSize+cellSize/2, size/2+ddz*cellSize+cellSize/2, 3, 0, Math.PI*2); ctx.fill();
+            ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1; ctx.stroke();
+        }
+        ctx.fillStyle = '#ff4444'; ctx.beginPath();
+        ctx.arc(size/2, size/2, 3, 0, Math.PI*2); ctx.fill();
+        ctx.strokeStyle = '#ff4444'; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(size/2, size/2);
+        ctx.lineTo(size/2 + Math.sin(players.level0.yaw)*6, size/2 + Math.cos(players.level0.yaw)*6); ctx.stroke();
+    }
+
+    let flickerTimer = 0, nextFlicker = 3+Math.random()*8, globalFlicker = 1.0, flickerSkip = 0;
+    function updateLights(delta, time) {
+        flickerTimer += delta;
+        if (flickerTimer > nextFlicker) {
+            flickerTimer = 0; nextFlicker = 2+Math.random()*10;
+            const strength = 0.3+Math.random()*0.6, duration = 0.05+Math.random()*0.2;
+            globalFlicker = 1.0 - strength;
+            setTimeout(() => { globalFlicker = Math.min(1.0, globalFlicker + strength*0.8); }, duration*1000);
+            setTimeout(() => { globalFlicker = 1.0; }, duration*2500);
+            flickerOverlay.style.background = 'rgba(0,0,0,'+(strength*0.3)+')';
+            setTimeout(() => { flickerOverlay.style.background = 'rgba(0,0,0,0.05)'; }, duration*1000);
+            setTimeout(() => { flickerOverlay.style.background = 'transparent'; }, duration*2500);
+        }
+        flickerSkip++;
+        if (flickerSkip % 3 === 0) {
+            for (const ld of level0Data.lightData) {
+                if (ld.type === 'flicker') {
+                    ld.flickerTimer += delta * ld.flickerSpeed;
+                    const fv = 0.5 + 0.5 * Math.sin(ld.flickerTimer*3.7) * Math.sin(ld.flickerTimer*7.1) * Math.sin(ld.flickerTimer*1.3+1.7);
+                    const inten = 0.6 + fv * ld.flickerIntensity;
+                    level0Data.lightMesh.setColorAt(ld.index, new THREE.Color('#ffffff').multiplyScalar(Math.max(0.2, inten)));
+                }
+            }
+            level0Data.lightMesh.instanceColor.needsUpdate = true;
+        }
+    }
+
+    function animateLevel0() {
+        if (currentPhase !== 'level0') return;
+        requestAnimationFrame(animateLevel0);
+        if (document.hidden) return;
+        const delta = Math.min(clocks.level0.getDelta(), 0.1);
+        const time = clocks.level0.getElapsedTime();
+        const player = players.level0;
+        const camera = cameras.level0;
+        const scene = scenes.level0;
+
+        if (level0Data.intro.active) {
+            level0Data.intro.time += delta;
+            const t = level0Data.intro.time;
+            if (t < 1.5) {
+                const p = t/1.5, ease = p*p;
+                camera.position.set(player.position.x + Math.sin(p*2.5)*0.6, 6.5*(1-ease)+0.25*ease, player.position.z + 1.5*(1-p));
+                camera.rotation.y = player.yaw; camera.rotation.x = -0.7+p*0.3+Math.sin(p*8)*0.08; camera.rotation.z = Math.sin(p*6)*0.15;
+            } else if (t < 2.0) {
+                const p = (t-1.5)/0.5;
+                camera.position.y = 0.25 + Math.sin(p*Math.PI*5)*0.06;
+                camera.rotation.x = -0.4 + Math.sin(p*Math.PI*8)*0.12; camera.rotation.z = Math.sin(p*Math.PI*6)*0.08;
+                postMaterial.uniforms.uFlicker.value = 0.6;
+                flickerOverlay.style.background = 'rgba(0,0,0,'+(0.2+Math.sin(p*Math.PI*6)*0.15)+')';
+            } else if (t < 4.5) {
+                const p = (t-2.0)/2.5, ease = 1-Math.pow(1-p, 3);
+                camera.position.set(player.position.x + Math.sin(t*2.2)*0.035*(1-p), 0.25+ease*1.35, player.position.z);
+                camera.rotation.x = -0.4 + ease*0.4; camera.rotation.z = Math.sin(t*3.5)*0.025*(1-p); camera.rotation.y = player.yaw;
+                flickerOverlay.style.background = 'transparent';
+            } else {
+                level0Data.intro.active = false;
+                camera.position.copy(player.position); camera.rotation.x = player.pitch; camera.rotation.z = 0;
+                showTitle('Level—0');
+            }
+            updateLights(delta, time);
+            if (level0Data.dust) {
+                const dp = level0Data.dust.geometry.attributes.position.array;
+                for (let i=0; i<CONFIG.dustCount; i++) {
+                    dp[i*3+1] += Math.sin(time*0.5+i*0.7)*0.003;
+                    dp[i*3] += Math.cos(time*0.4+i*0.9)*0.002;
+                    dp[i*3+2] += Math.sin(time*0.45+i*0.6)*0.002;
+                    if (dp[i*3+1] > 2.7) dp[i*3+1] = 0.3; if (dp[i*3+1] < 0.2) dp[i*3+1] = 2.7;
+                }
+                level0Data.dust.geometry.attributes.position.needsUpdate = true;
+            }
+            renderer.setRenderTarget(renderTarget); renderer.render(scene, camera); renderer.setRenderTarget(null);
+            postMaterial.uniforms.uTime.value = time;
+            const breathe = Math.sin(time*0.35)*0.02;
+            const introDistort = t < 2.0 ? 0.08 : 0;
+            postMaterial.uniforms.uDistortion.value = 0.06 + breathe + introDistort;
+            postMaterial.uniforms.uRGBShift.value = (0.06+breathe)*0.8;
+            postMaterial.uniforms.uFlicker.value = (t>=1.5 && t<2.0) ? 0.6 : (0.06+Math.sin(time*0.8)*0.04+Math.sin(time*2.1)*0.02);
+            renderer.render(postScene, postCamera);
+            perfMonitor.tick(); return;
+        }
+
+        let moveX = joystickDelta.x, moveZ = joystickDelta.z;
+        if (keys['w'] || keys['arrowup']) moveZ = Math.max(moveZ, 0.85);
+        if (keys['s'] || keys['arrowdown']) moveZ = Math.min(moveZ, -0.7);
+        if (keys['a'] || keys['arrowleft']) moveX = Math.min(moveX, -0.8);
+        if (keys['d'] || keys['arrowright']) moveX = Math.max(moveX, 0.8);
+        const mag = Math.sqrt(moveX*moveX + moveZ*moveZ);
+        if (mag > 1.0) { moveX /= mag; moveZ /= mag; }
+        const isMoving = mag > 0.08; player.isMoving = isMoving;
+
+        if (lookDelta.x !== 0 || lookDelta.y !== 0) {
+            player.yaw -= lookDelta.x * 0.003; player.pitch -= lookDelta.y * 0.0025;
+            player.pitch = Math.max(-0.55, Math.min(0.4, player.pitch));
+            lookDelta.x = 0; lookDelta.y = 0;
+        }
+        if (!mouseLookActive && lookTouchId === null) { lookDelta.x *= 0.85; lookDelta.y *= 0.85; if (Math.abs(lookDelta.x) < 0.01) lookDelta.x = 0; if (Math.abs(lookDelta.y) < 0.01) lookDelta.y = 0; }
+
+        const fx = -Math.sin(player.yaw), fz = -Math.cos(player.yaw);
+        const rx = Math.cos(player.yaw), rz = -Math.sin(player.yaw);
+        const speed = player.moveSpeed * (isMoving ? (mag > 0.7 ? 1.0 : 0.6) : 0);
+        const desiredX = player.position.x + (fx*moveZ + rx*moveX) * speed * delta;
+        const desiredZ = player.position.z + (fz*moveZ + rz*moveX) * speed * delta;
+        const resolved = resolveMoveL0(desiredX, desiredZ);
+        player.position.x = resolved.x; player.position.z = resolved.z;
+        const mapHalf = (CONFIG.gridSize*CONFIG.cellSize)/2 - CONFIG.cellSize*0.6;
+        player.position.x = Math.max(-mapHalf, Math.min(mapHalf, player.position.x));
+        player.position.z = Math.max(-mapHalf, Math.min(mapHalf, player.position.z));
+
+        camera.position.copy(player.position); camera.rotation.y = player.yaw; camera.rotation.x = player.pitch; camera.rotation.z = 0;
+        if (isMoving) {
+            const wt = time * 9;
+            camera.position.y += Math.sin(wt)*0.015;
+            camera.rotation.z = Math.sin(wt*0.5)*0.006;
+            camera.rotation.x = player.pitch + Math.sin(wt*0.7)*0.003;
+        }
+
+        scene.children.forEach(c => { if (c.isPointLight && c.intensity === 18) { c.position.set(player.position.x, 2.2, player.position.z); } });
+
+        if (level0Data.dust) {
+            const dp = level0Data.dust.geometry.attributes.position.array;
+            for (let i=0; i<CONFIG.dustCount; i++) {
+                dp[i*3+1] += Math.sin(time*0.5+i*0.7)*0.003;
+                dp[i*3] += Math.cos(time*0.4+i*0.9)*0.002;
+                dp[i*3+2] += Math.sin(time*0.45+i*0.6)*0.002;
+                if (dp[i*3+1] > 2.7) dp[i*3+1] = 0.3; if (dp[i*3+1] < 0.2) dp[i*3+1] = 2.7;
+                const hm = (CONFIG.gridSize*CONFIG.cellSize)/2 - 1;
+                if (Math.abs(dp[i*3]) > hm) dp[i*3] *= -0.9; if (Math.abs(dp[i*3+2]) > hm) dp[i*3+2] *= -0.9;
+            }
+            level0Data.dust.geometry.attributes.position.needsUpdate = true;
+        }
+
+        updateLights(delta, time); updateAudio(time);
+        if (globalFlicker < 0.98) { globalFlicker += delta*1.5; if (globalFlicker > 1.0) globalFlicker = 1.0; }
+
+        if (flashlightSystem.isOn) {
+            flashlightSystem.light.intensity += (20 - flashlightSystem.light.intensity)*0.2;
+            flashlightSystem.light.position.copy(camera.position);
+            flashlightSystem.target.position.set(camera.position.x - Math.sin(player.yaw)*3, camera.position.y + Math.sin(player.pitch)*3, camera.position.z - Math.cos(player.yaw)*3);
+            flashlightSystem.mesh.visible = true; flashlightSystem.mesh.position.copy(camera.position);
+            flashlightSystem.mesh.position.y -= 0.15; flashlightSystem.mesh.position.x += Math.cos(player.yaw)*0.15 + Math.sin(player.yaw)*0.1;
+            flashlightSystem.mesh.position.z += Math.sin(player.yaw)*0.15 - Math.cos(player.yaw)*0.1;
+            flashlightSystem.mesh.rotation.y = player.yaw; flashlightSystem.mesh.rotation.x = player.pitch + Math.PI/2;
+        } else { flashlightSystem.light.intensity += (0 - flashlightSystem.light.intensity)*0.2; flashlightSystem.mesh.visible = false; }
+
+        if (!level0Data.doorOpen && level0Data.door) {
+            const dx = level0Data.doorPos.x - player.position.x;
+            const dz = level0Data.doorPos.z - player.position.z;
+            const dist = Math.sqrt(dx*dx + dz*dz);
+            const hint = document.getElementById('backrooms-door-hint');
+            if (dist < 2.5) hint.classList.add('active'); else hint.classList.remove('active');
+        }
+        if (level0Data.doorOpen && level0Data.door) {
+            const now = performance.now()/1000;
+            const dp = Math.min((now - level0Data.doorOpenTime) / 1.2, 1.0);
+            const ease = dp*dp*(3-2*dp);
+            level0Data.door.leftDoor.rotation.y = ease * Math.PI/2.2;
+            level0Data.door.rightDoor.rotation.y = -ease * Math.PI/2.2;
+            if (dp >= 1.0) { transitionToElevator(); return; }
+        }
+
+        updateMinimap();
+        renderer.setRenderTarget(renderTarget); renderer.render(scene, camera); renderer.setRenderTarget(null);
+        postMaterial.uniforms.uTime.value = time;
+        const breathe = Math.sin(time*0.35)*0.02;
+        const baseDistort = 0.06 + breathe;
+        const flickerBase = 0.06 + Math.sin(time*0.8)*0.04 + Math.sin(time*2.1)*0.02;
+        const randomBurst = Math.random() < 0.012 ? 0.2 : 0;
+        postMaterial.uniforms.uDistortion.value = baseDistort;
+        postMaterial.uniforms.uRGBShift.value = baseDistort*0.8;
+        postMaterial.uniforms.uFlicker.value = Math.min(0.45, flickerBase + randomBurst);
+        renderer.render(postScene, postCamera);
+        if (time > 8) document.getElementById('hint-text').style.opacity = '0';
+        perfMonitor.tick();
+    }
+
+    document.getElementById('backrooms-door-hint').addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (currentPhase === 'level0' && !level0Data.doorOpen) {
+            const p = players.level0;
+            const dx = level0Data.doorPos.x - p.position.x;
+            const dz = level0Data.doorPos.z - p.position.z;
+            if (Math.sqrt(dx*dx+dz*dz) < 2.5) { level0Data.doorOpen = true; level0Data.doorOpenTime = performance.now()/1000; }
+        }
+    });
+
+    // ==================== 电梯场景 ====================
+    let elevatorData = { doorLeft: null, doorRight: null, isOpen: false, time: 0 };
+    function transitionToElevator() {
+        currentPhase = 'elevator';
+        document.getElementById('backrooms-door-ui').style.display = 'none';
+        document.getElementById('info-bar').style.display = 'none';
+        document.getElementById('minimap-container').style.display = 'none';
+        initElevator();
+    }
+    function initElevator() {
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color('#1a1a1a');
+        scene.fog = new THREE.FogExp2('#1a1a1a', 0.02);
+        scenes.elevator = scene;
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 50);
+        camera.position.set(0, 1.6, 0); camera.rotation.order = 'YXZ';
+        cameras.elevator = camera;
+
+        const ew = 2.5, ed = 2.5, eh = 2.8;
+        const floor = new THREE.Mesh(new THREE.PlaneGeometry(ew, ed), new THREE.MeshStandardMaterial({ color: '#3a3a3a', roughness: 0.6, metalness: 0.3 }));
+        floor.rotation.x = -Math.PI/2; scene.add(floor);
+        const ceil = new THREE.Mesh(new THREE.PlaneGeometry(ew, ed), new THREE.MeshStandardMaterial({ color: '#2a2a2a', roughness: 0.8 }));
+        ceil.rotation.x = Math.PI/2; ceil.position.y = eh; scene.add(ceil);
+        const wallMat = new THREE.MeshStandardMaterial({ color: '#4a4a4a', roughness: 0.4, metalness: 0.6 });
+        const bw = new THREE.Mesh(new THREE.PlaneGeometry(ew, eh), wallMat); bw.position.set(0, eh/2, -ed/2); scene.add(bw);
+        const lw = new THREE.Mesh(new THREE.PlaneGeometry(ed, eh), wallMat); lw.rotation.y = Math.PI/2; lw.position.set(-ew/2, eh/2, 0); scene.add(lw);
+        const rw = new THREE.Mesh(new THREE.PlaneGeometry(ed, eh), wallMat); rw.rotation.y = -Math.PI/2; rw.position.set(ew/2, eh/2, 0); scene.add(rw);
+
+        const frameMat = new THREE.MeshStandardMaterial({ color: '#5a5a5a', metalness: 0.7, roughness: 0.3 });
+        scene.add(new THREE.Mesh(new THREE.BoxGeometry(ew, 0.2, 0.2), frameMat).translateY(eh-0.1).translateZ(ed/2));
+        scene.add(new THREE.Mesh(new THREE.BoxGeometry(0.2, eh, 0.2), frameMat).translateX(-ew/2+0.1).translateY(eh/2).translateZ(ed/2));
+        scene.add(new THREE.Mesh(new THREE.BoxGeometry(0.2, eh, 0.2), frameMat).translateX(ew/2-0.1).translateY(eh/2).translateZ(ed/2));
+
+        const doorMat = new THREE.MeshStandardMaterial({ color: '#6a6a6a', metalness: 0.5, roughness: 0.4 });
+        elevatorData.doorLeft = new THREE.Group();
+        elevatorData.doorLeft.add(new THREE.Mesh(new THREE.BoxGeometry(ew/2-0.1, eh-0.2, 0.08), doorMat).translateX(-(ew/4-0.05)).translateY(eh/2));
+        elevatorData.doorLeft.position.set(-ew/4+0.1, 0, ed/2); scene.add(elevatorData.doorLeft);
+        elevatorData.doorRight = new THREE.Group();
+        elevatorData.doorRight.add(new THREE.Mesh(new THREE.BoxGeometry(ew/2-0.1, eh-0.2, 0.08), doorMat).translateX(ew/4-0.05).translateY(eh/2));
+        elevatorData.doorRight.position.set(ew/4-0.1, 0, ed/2); scene.add(elevatorData.doorRight);
+
+        scene.add(new THREE.AmbientLight('#f0e8d0', 0.8));
+        const tl = new THREE.PointLight('#fff8e0', 10, 8, 1.5); tl.position.set(0, eh-0.2, 0); scene.add(tl);
+
+        elevatorData.isOpen = false; elevatorData.time = 0;
+        clocks.elevator = new THREE.Clock();
+        animateElevator();
+    }
+    function animateElevator() {
+        if (currentPhase !== 'elevator') return;
+        requestAnimationFrame(animateElevator);
+        if (document.hidden) return;
+        const delta = Math.min(clocks.elevator.getDelta(), 0.1);
+        elevatorData.time += delta;
+        if (elevatorData.time > 5 && !elevatorData.isOpen) elevatorData.isOpen = true;
+        if (elevatorData.isOpen) {
+            const dp = Math.min((elevatorData.time - 5) / 1.5, 1.0);
+            const ease = dp*dp*(3-2*dp);
+            elevatorData.doorLeft.position.x = (-2.5/4+0.1) - ease*1.0;
+            elevatorData.doorRight.position.x = (2.5/4-0.1) + ease*1.0;
+            if (dp >= 1.0) {
+                if (!document.getElementById('elevator-hint')) {
+                    const hint = document.createElement('div');
+                    hint.id = 'elevator-hint';
+                    hint.style.cssText = 'position:fixed;bottom:140px;left:50%;transform:translateX(-50%);color:rgba(220,200,150,0.95);font-size:15px;letter-spacing:3px;text-shadow:0 0 15px rgba(180,150,80,0.9);background:rgba(0,0,0,0.5);padding:14px 28px;border:1px solid rgba(200,180,130,0.5);border-radius:4px;backdrop-filter:blur(4px);z-index:50;pointer-events:none;';
+                    hint.textContent = '走出电梯'; document.body.appendChild(hint);
+                }
+                let moveZ = joystickDelta.z;
+                if (keys['w'] || keys['arrowup']) moveZ = Math.max(moveZ, 0.85);
+                if (moveZ > 0.3) { transitionToParking(); return; }
+            }
+        }
+        cameras.elevator.position.y = 1.6 + Math.sin(elevatorData.time*0.5)*0.005;
+        renderer.setRenderTarget(renderTarget); renderer.render(scenes.elevator, cameras.elevator); renderer.setRenderTarget(null);
+        postMaterial.uniforms.uTime.value = elevatorData.time;
+        postMaterial.uniforms.uDistortion.value = 0.03; postMaterial.uniforms.uRGBShift.value = 0.02; postMaterial.uniforms.uFlicker.value = 0.05;
+        renderer.render(postScene, postCamera); perfMonitor.tick();
+    }
+
+    // ==================== Level 1（停车场）====================
+    let parkingData = { doorPos: {x:0,z:0}, door: null, doorOpen: false, doorOpenTime: 0 };
+    function transitionToParking() {
+        currentPhase = 'parking';
+        const h = document.getElementById('elevator-hint'); if (h) h.remove();
+        initParking();
+    }
+    function initParking() {
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color('#555555');
+        scene.fog = new THREE.FogExp2('#555555', 0.006);
+        scenes.parking = scene;
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 60);
+        camera.rotation.order = 'YXZ';
+        cameras.parking = camera;
+
+        const ps = 80;
+        function warnTex() {
+            const c = document.createElement('canvas'); c.width = 256; c.height = 256;
+            const ctx = c.getContext('2d'); ctx.fillStyle = '#ffcc00'; ctx.fillRect(0,0,256,256); ctx.fillStyle = '#1a1a1a';
+            const sw = 32;
+            for (let i=-256; i<512; i+=sw*2) { ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i+sw,0); ctx.lineTo(i-sw,256); ctx.lineTo(i-sw*2,256); ctx.fill(); }
+            const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; return t;
+        }
+        const wTex = warnTex();
+        const floor = new THREE.Mesh(new THREE.PlaneGeometry(ps, ps), new THREE.MeshStandardMaterial({ color: '#777777', roughness: 0.9, metalness: 0.05 }));
+        floor.rotation.x = -Math.PI/2; scene.add(floor);
+        const ceil = new THREE.Mesh(new THREE.PlaneGeometry(ps, ps), new THREE.MeshStandardMaterial({ color: '#666666', roughness: 0.95 }));
+        ceil.rotation.x = Math.PI/2; ceil.position.y = 3.5; scene.add(ceil);
+
+        const pGeo = new THREE.BoxGeometry(0.8, 3.5, 0.8), pMat = new THREE.MeshStandardMaterial({ color: '#888888', roughness: 0.9 });
+        function addPillar(px, pz) {
+            const pillar = new THREE.Mesh(pGeo, pMat); pillar.position.set(px, 1.75, pz); scene.add(pillar);
+            const strip = new THREE.Mesh(new THREE.BoxGeometry(0.84, 0.2, 0.84), new THREE.MeshStandardMaterial({ map: wTex, roughness: 0.7, metalness: 0.1 }));
+            strip.position.set(px, 0.1, pz); scene.add(strip);
+        }
+        const psp = 10;
+        for (let x=-ps/2+5; x<ps/2; x+=psp) for (let z=-ps/2+5; z<ps/2; z+=psp) addPillar(x, z);
+        const wo = ps/2 - 1;
+        for (let x=-wo+2; x<wo-2; x+=psp) { addPillar(x, -wo); addPillar(x, wo); }
+        for (let z=-wo+2; z<wo-2; z+=psp) { addPillar(-wo, z); addPillar(wo, z); }
+
+        const lMat = new THREE.MeshBasicMaterial({ color: '#ffffff' });
+        const lw = 0.1, ll = 5.5, sw = 2.5, sd = 5.5;
+        for (let x=-ps/2+8; x<ps/2-8; x+=sw) {
+            for (let z=-ps/2+8; z<ps/2-8; z+=sd*2) {
+                const l1 = new THREE.Mesh(new THREE.PlaneGeometry(lw, ll), lMat); l1.rotation.x = -Math.PI/2; l1.position.set(x, 0.01, z+sd/2); scene.add(l1);
+                const l2 = new THREE.Mesh(new THREE.PlaneGeometry(lw, ll), lMat); l2.rotation.x = -Math.PI/2; l2.position.set(x+sw, 0.01, z+sd/2); scene.add(l2);
+                const el = new THREE.Mesh(new THREE.PlaneGeometry(sw, lw), lMat); el.rotation.x = -Math.PI/2; el.position.set(x+sw/2, 0.01, z+sd); scene.add(el);
+            }
+        }
+
+        const rMat = new THREE.MeshStandardMaterial({ color: '#ff6600', metalness: 0.3, roughness: 0.6 });
+        for (let i=0; i<20; i++) {
+            const x = (Math.random()-0.5)*ps*0.8, z = (Math.random()-0.5)*ps*0.8;
+            const post1 = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 1.0, 8), rMat); post1.position.set(x-1.5, 0.5, z); scene.add(post1);
+            const post2 = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 1.0, 8), rMat); post2.position.set(x+1.5, 0.5, z); scene.add(post2);
+            const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 3.0, 8), rMat); bar.rotation.z = Math.PI/2; bar.position.set(x, 0.9, z); scene.add(bar);
+        }
+
+        const bMat = new THREE.MeshStandardMaterial({ color: '#ffaa00', roughness: 0.7 });
+        for (let i=0; i<15; i++) {
+            const x = (Math.random()-0.5)*ps*0.8, z = (Math.random()-0.5)*ps*0.8;
+            const barrier = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.8, 0.4), bMat); barrier.position.set(x, 0.4, z); scene.add(barrier);
+            const ref = new THREE.Mesh(new THREE.BoxGeometry(1.02, 0.1, 0.42), new THREE.MeshBasicMaterial({ color: '#ffffff' })); ref.position.set(x, 0.6, z); scene.add(ref);
+        }
+
+        const pipeMat = new THREE.MeshStandardMaterial({ color: '#666666', metalness: 0.8, roughness: 0.3 });
+        for (let i=0; i<10; i++) {
+            const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, ps, 16), pipeMat);
+            pipe.rotation.z = Math.PI/2 * Math.floor(Math.random()*2);
+            pipe.position.set((Math.random()-0.5)*ps*0.8, 3.0+Math.random()*0.3, (Math.random()-0.5)*ps*0.8); scene.add(pipe);
+        }
+
+        scene.add(new THREE.AmbientLight('#888888', 1.5));
+        for (let i=0; i<50; i++) {
+            const x = (Math.random()-0.5)*ps*0.8, z = (Math.random()-0.5)*ps*0.8;
+            const light = new THREE.PointLight('#e0e0e0', 18, 20, 1.5); light.position.set(x, 3.2, z); scene.add(light);
+        }
+
+        const eFrame = new THREE.Group();
+        const fMat = new THREE.MeshStandardMaterial({ color: '#5a5a5a', metalness: 0.7 });
+        eFrame.add(new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.2, 0.2), fMat).translateY(2.8));
+        eFrame.add(new THREE.Mesh(new THREE.BoxGeometry(0.2, 2.8, 0.2), fMat).translateX(-1.15).translateY(1.4));
+        eFrame.add(new THREE.Mesh(new THREE.BoxGeometry(0.2, 2.8, 0.2), fMat).translateX(1.15).translateY(1.4));
+        eFrame.position.set(0, 0, 5); scene.add(eFrame);
+
+        parkingData.doorPos = { x: 25 + Math.random()*10, z: -25 - Math.random()*10 };
+        const exitDoor = createDoorMesh();
+        exitDoor.group.position.set(parkingData.doorPos.x, 0, parkingData.doorPos.z);
+        exitDoor.group.rotation.y = Math.PI / 4;
+        const exitLight = new THREE.PointLight('#00ff00', 12, 15, 1);
+        exitLight.position.set(parkingData.doorPos.x, 2.5, parkingData.doorPos.z);
+        scene.add(exitLight);
+        const exitGlow = new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 16), new THREE.MeshBasicMaterial({ color: '#00ff00' }));
+        exitGlow.position.set(parkingData.doorPos.x, 2.5, parkingData.doorPos.z); scene.add(exitGlow);
+        const arrowGeo = new THREE.ConeGeometry(0.3, 0.6, 4);
+        const arrowMat = new THREE.MeshBasicMaterial({ color: '#00ff00' });
+        const arrow = new THREE.Mesh(arrowGeo, arrowMat);
+        arrow.position.set(parkingData.doorPos.x, 3.5, parkingData.doorPos.z);
+        arrow.rotation.x = Math.PI;
+        scene.add(arrow);
+        scene.add(exitDoor.group);
+        parkingData.door = exitDoor;
+
+        players.parking = { position: new THREE.Vector3(0, 1.6, 4), yaw: Math.PI, pitch: 0 };
+        camera.position.copy(players.parking.position);
+        camera.rotation.y = players.parking.yaw; camera.rotation.x = players.parking.pitch;
+
+        document.getElementById('parking-door-ui').style.display = 'flex';
+        document.getElementById('info-bar').style.display = 'block';
+        document.getElementById('level-tag').textContent = '后室 · Level 1';
+        document.getElementById('minimap-container').style.display = 'none';
+
+        clocks.parking = new THREE.Clock();
+        showTitle('Level—1');
+        animateParking();
+    }
+    function animateParking() {
+        if (currentPhase !== 'parking') return;
+        requestAnimationFrame(animateParking);
+        if (document.hidden) return;
+        const delta = Math.min(clocks.parking.getDelta(), 0.1);
+        const time = clocks.parking.getElapsedTime();
+        const player = players.parking;
+        const camera = cameras.parking;
+
+        let moveX = joystickDelta.x, moveZ = joystickDelta.z;
+        if (keys['w'] || keys['arrowup']) moveZ = Math.max(moveZ, 0.85);
+        if (keys['s'] || keys['arrowdown']) moveZ = Math.min(moveZ, -0.7);
+        if (keys['a'] || keys['arrowleft']) moveX = Math.min(moveX, -0.8);
+        if (keys['d'] || keys['arrowright']) moveX = Math.max(moveX, 0.8);
+        const mag = Math.sqrt(moveX*moveX + moveZ*moveZ);
+        if (mag > 1.0) { moveX /= mag; moveZ /= mag; }
+
+        if (lookDelta.x !== 0 || lookDelta.y !== 0) {
+            player.yaw -= lookDelta.x * 0.003; player.pitch -= lookDelta.y * 0.0025;
+            player.pitch = Math.max(-0.55, Math.min(0.4, player.pitch));
+            lookDelta.x = 0; lookDelta.y = 0;
+        }
+        if (!mouseLookActive && lookTouchId === null) { lookDelta.x *= 0.85; lookDelta.y *= 0.85; if (Math.abs(lookDelta.x) < 0.01) lookDelta.x = 0; if (Math.abs(lookDelta.y) < 0.01) lookDelta.y = 0; }
+
+        const fx = -Math.sin(player.yaw), fz = -Math.cos(player.yaw);
+        const rx = Math.cos(player.yaw), rz = -Math.sin(player.yaw);
+        const speed = 3.2 * (mag > 0.7 ? 1.0 : (mag > 0.08 ? 0.6 : 0));
+        player.position.x += (fx*moveZ + rx*moveX) * speed * delta;
+        player.position.z += (fz*moveZ + rz*moveX) * speed * delta;
+        const limit = 38;
+        player.position.x = Math.max(-limit, Math.min(limit, player.position.x));
+        player.position.z = Math.max(-limit, Math.min(limit, player.position.z));
+
+        camera.position.copy(player.position); camera.rotation.y = player.yaw; camera.rotation.x = player.pitch;
+        if (mag > 0.08) {
+            const wt = time * 9;
+            camera.position.y += Math.sin(wt)*0.015;
+            camera.rotation.z = Math.sin(wt*0.5)*0.006;
+        }
+
+        if (!parkingData.doorOpen && parkingData.door) {
+            const dx = parkingData.doorPos.x - player.position.x;
+            const dz = parkingData.doorPos.z - player.position.z;
+            const dist = Math.sqrt(dx*dx + dz*dz);
+            const hint = document.getElementById('parking-door-hint');
+            if (dist < 3.0) { hint.textContent = '点击开门'; hint.classList.add('active'); }
+            else { hint.textContent = '找到出口门（寻找绿光）'; hint.classList.remove('active'); }
+        }
+        if (parkingData.doorOpen && parkingData.door) {
+            const now = performance.now()/1000;
+            const dp = Math.min((now - parkingData.doorOpenTime) / 1.2, 1.0);
+            const ease = dp*dp*(3-2*dp);
+            parkingData.door.leftDoor.rotation.y = ease * Math.PI/2.2;
+            parkingData.door.rightDoor.rotation.y = -ease * Math.PI/2.2;
+            if (dp >= 1.0) { transitionToPipe(); return; }
+        }
+
+        renderer.setRenderTarget(renderTarget); renderer.render(scenes.parking, camera); renderer.setRenderTarget(null);
+        postMaterial.uniforms.uTime.value = time;
+        postMaterial.uniforms.uDistortion.value = 0.02;
+        postMaterial.uniforms.uRGBShift.value = 0.015;
+        postMaterial.uniforms.uFlicker.value = 0.04;
+        renderer.render(postScene, postCamera); perfMonitor.tick();
+    }
+    document.getElementById('parking-door-hint').addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (currentPhase === 'parking' && !parkingData.doorOpen) {
+            const p = players.parking;
+            const dx = parkingData.doorPos.x - p.position.x;
+            const dz = parkingData.doorPos.z - p.position.z;
+            if (Math.sqrt(dx*dx+dz*dz) < 3.0) { parkingData.doorOpen = true; parkingData.doorOpenTime = performance.now()/1000; }
+        }
+    });
+
+    // ==================== Level 2（管道走廊 - 超级高亮度）====================
+    let pipeData = { entity: null, entityPos: {x:0,z:0}, entityPath: [], entityTarget: 0, pipeDoor: null, doorPos: {x:0,z:0}, doorOpen: false, doorOpenTime: 0, danger: 0 };
+    function transitionToPipe() {
+        currentPhase = 'pipe';
+        document.getElementById('parking-door-ui').style.display = 'none';
+        document.getElementById('danger-bar').style.display = 'block';
+        document.getElementById('danger-text').style.display = 'block';
+        initPipe();
+    }
+    function initPipe() {
+        const scene = new THREE.Scene();
+        // 超级高亮度背景
+        scene.background = new THREE.Color('#cccccc');
+        scene.fog = new THREE.FogExp2('#cccccc', 0.003);
+        scenes.pipe = scene;
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 40);
+        camera.rotation.order = 'YXZ';
+        cameras.pipe = camera;
+
+        const W = 4, H = 3.2, L = 60;
+        // 超亮地板
+        const floorTex = createNoiseTexture('#bbbbbb', 15, 20);
+        const floor = new THREE.Mesh(new THREE.PlaneGeometry(W, L), new THREE.MeshStandardMaterial({ map: floorTex, roughness: 0.7, metalness: 0.1, color: '#cccccc' }));
+        floor.rotation.x = -Math.PI/2; scene.add(floor);
+        // 超亮天花板
+        const ceil = new THREE.Mesh(new THREE.PlaneGeometry(W, L), new THREE.MeshStandardMaterial({ color: '#dddddd', roughness: 0.8 }));
+        ceil.rotation.x = Math.PI/2; ceil.position.y = H; scene.add(ceil);
+        // 超亮墙壁
+        const wallMat = new THREE.MeshStandardMaterial({ color: '#bbbbbb', roughness: 0.6, metalness: 0.2 });
+        const lw1 = new THREE.Mesh(new THREE.PlaneGeometry(L, H), wallMat); lw1.rotation.y = Math.PI/2; lw1.position.set(-W/2, H/2, 0); scene.add(lw1);
+        const lw2 = new THREE.Mesh(new THREE.PlaneGeometry(L, H), wallMat); lw2.rotation.y = -Math.PI/2; lw2.position.set(W/2, H/2, 0); scene.add(lw2);
+
+        // 管道保持原样但稍亮
+        const pipeMat = new THREE.MeshStandardMaterial({ color: '#888888', metalness: 0.7, roughness: 0.4 });
+        for (let i=0; i<8; i++) {
+            const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, L, 16), pipeMat);
+            pipe.rotation.x = Math.PI/2;
+            pipe.position.set(-W/2 + 0.3 + i*0.4, 0.3 + Math.random()*0.5, 0); scene.add(pipe);
+        }
+        for (let i=0; i<5; i++) {
+            const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, L, 16), pipeMat);
+            pipe.rotation.x = Math.PI/2;
+            pipe.position.set((Math.random()-0.5)*W*0.6, H-0.3, 0); scene.add(pipe);
+        }
+
+        // 超亮灯光系统
+        for (let z=-L/2+3; z<L/2; z+=8) {
+            const light = new THREE.PointLight('#ffffff', 30, 25, 1.0);
+            light.position.set(0, H-0.2, z); scene.add(light);
+            const fixture = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.06, 0.2), new THREE.MeshBasicMaterial({ color: '#ffffff' }));
+            fixture.position.set(0, H-0.05, z); scene.add(fixture);
+        }
+        // 超强环境光
+        scene.add(new THREE.AmbientLight('#ffffff', 2.5));
+        // 额外半球光
+        scene.add(new THREE.HemisphereLight('#ffffff', '#888888', 1.0));
+
+        const entityGroup = new THREE.Group();
+        const body = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.4, 1.8, 8), new THREE.MeshStandardMaterial({ color: '#0a0a0a', roughness: 0.9 }));
+        body.position.y = 0.9; entityGroup.add(body);
+        const head = new THREE.Mesh(new THREE.SphereGeometry(0.25, 8, 8), new THREE.MeshStandardMaterial({ color: '#0a0a0a', roughness: 0.9 }));
+        head.position.y = 1.9; entityGroup.add(head);
+        const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.04, 8, 8), new THREE.MeshBasicMaterial({ color: '#ff0000' }));
+        eyeL.position.set(-0.08, 1.95, 0.2); entityGroup.add(eyeL);
+        const eyeR = new THREE.Mesh(new THREE.SphereGeometry(0.04, 8, 8), new THREE.MeshBasicMaterial({ color: '#ff0000' }));
+        eyeR.position.set(0.08, 1.95, 0.2); entityGroup.add(eyeR);
+        entityGroup.position.set(0, 0, -L/2 + 5);
+        scene.add(entityGroup);
+        pipeData.entity = entityGroup;
+        pipeData.entityPos = { x: 0, z: -L/2 + 5 };
+
+        pipeData.entityPath = [];
+        for (let i=0; i<10; i++) {
+            pipeData.entityPath.push({
+                x: (Math.random()-0.5) * W * 0.6,
+                z: -L/2 + 5 + Math.random() * (L - 10)
+            });
+        }
+        pipeData.entityTarget = 0;
+
+        pipeData.doorPos = { x: 0, z: L/2 - 2 };
+        const ventGroup = new THREE.Group();
+        ventGroup.position.set(0, 1.5, L/2 - 0.1);
+        const ventFrame = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.0, 0.1), new THREE.MeshStandardMaterial({ color: '#666666', metalness: 0.5 }));
+        ventGroup.add(ventFrame);
+        for (let i=-0.6; i<=0.6; i+=0.2) {
+            const bar = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.9, 0.05), new THREE.MeshStandardMaterial({ color: '#444444' }));
+            bar.position.set(i, 0, 0.05); ventGroup.add(bar);
+        }
+        const ventLight = new THREE.PointLight('#00ff00', 8, 8, 1);
+        ventLight.position.set(0, 0, -0.5); ventGroup.add(ventLight);
+        scene.add(ventGroup);
+        pipeData.pipeDoor = ventGroup;
+
+        players.pipe = { position: new THREE.Vector3(0, 1.6, -L/2 + 2), yaw: 0, pitch: 0 };
+        camera.position.copy(players.pipe.position);
+        camera.rotation.y = players.pipe.yaw; camera.rotation.x = players.pipe.pitch;
+
+        document.getElementById('pipe-door-ui').style.display = 'flex';
+        document.getElementById('info-bar').style.display = 'block';
+        document.getElementById('level-tag').textContent = '后室 · Level 2';
+
+        clocks.pipe = new THREE.Clock();
+        showTitle('Level—2');
+        animatePipe();
+    }
+    function animatePipe() {
+        if (currentPhase !== 'pipe') return;
+        requestAnimationFrame(animatePipe);
+        if (document.hidden) return;
+        const delta = Math.min(clocks.pipe.getDelta(), 0.1);
+        const time = clocks.pipe.getElapsedTime();
+        const player = players.pipe;
+        const camera = cameras.pipe;
+
+        let moveX = joystickDelta.x, moveZ = joystickDelta.z;
+        if (keys['w'] || keys['arrowup']) moveZ = Math.max(moveZ, 0.85);
+        if (keys['s'] || keys['arrowdown']) moveZ = Math.min(moveZ, -0.7);
+        if (keys['a'] || keys['arrowleft']) moveX = Math.min(moveX, -0.8);
+        if (keys['d'] || keys['arrowright']) moveX = Math.max(moveX, 0.8);
+        const mag = Math.sqrt(moveX*moveX + moveZ*moveZ);
+        if (mag > 1.0) { moveX /= mag; moveZ /= mag; }
+
+        if (lookDelta.x !== 0 || lookDelta.y !== 0) {
+            player.yaw -= lookDelta.x * 0.003; player.pitch -= lookDelta.y * 0.0025;
+            player.pitch = Math.max(-0.55, Math.min(0.4, player.pitch));
+            lookDelta.x = 0; lookDelta.y = 0;
+        }
+        if (!mouseLookActive && lookTouchId === null) { lookDelta.x *= 0.85; lookDelta.y *= 0.85; if (Math.abs(lookDelta.x) < 0.01) lookDelta.x = 0; if (Math.abs(lookDelta.y) < 0.01) lookDelta.y = 0; }
+
+        const fx = -Math.sin(player.yaw), fz = -Math.cos(player.yaw);
+        const rx = Math.cos(player.yaw), rz = -Math.sin(player.yaw);
+        const speed = 3.2 * (mag > 0.7 ? 1.0 : (mag > 0.08 ? 0.6 : 0));
+        player.position.x += (fx*moveZ + rx*moveX) * speed * delta;
+        player.position.z += (fz*moveZ + rz*moveX) * speed * delta;
+        player.position.x = Math.max(-1.8, Math.min(1.8, player.position.x));
+        player.position.z = Math.max(-29, Math.min(29, player.position.z));
+
+        camera.position.copy(player.position); camera.rotation.y = player.yaw; camera.rotation.x = player.pitch;
+        if (mag > 0.08) {
+            const wt = time * 9;
+            camera.position.y += Math.sin(wt)*0.015;
+            camera.rotation.z = Math.sin(wt*0.5)*0.006;
+        }
+
+        if (pipeData.entity) {
+            const target = pipeData.entityPath[pipeData.entityTarget];
+            const edx = target.x - pipeData.entityPos.x;
+            const edz = target.z - pipeData.entityPos.z;
+            const edist = Math.sqrt(edx*edx + edz*edz);
+            const espeed = 1.5 * delta;
+            if (edist < 0.5) {
+                pipeData.entityTarget = (pipeData.entityTarget + 1) % pipeData.entityPath.length;
+            } else {
+                pipeData.entityPos.x += (edx/edist) * espeed;
+                pipeData.entityPos.z += (edz/edist) * espeed;
+            }
+            pipeData.entity.position.set(pipeData.entityPos.x, 0, pipeData.entityPos.z);
+            pipeData.entity.lookAt(player.position.x, 1.6, player.position.z);
+
+            const pdx = pipeData.entityPos.x - player.position.x;
+            const pdz = pipeData.entityPos.z - player.position.z;
+            const pdist = Math.sqrt(pdx*pdx + pdz*pdz);
+            const danger = Math.max(0, 1 - pdist/10);
+            pipeData.danger = danger;
+            document.getElementById('danger-fill').style.width = (danger*100) + '%';
+            const warn = document.getElementById('entity-warning');
+            if (danger > 0.5) { warn.style.opacity = '1'; playAlertSound(); }
+            else warn.style.opacity = '0';
+
+            if (pdist < 1.5) {
+                postMaterial.uniforms.uDistortion.value = 0.8;
+                postMaterial.uniforms.uFlicker.value = 1.0;
+                player.position.set(0, 1.6, -28);
+                player.yaw = 0;
+                flickerOverlay.style.background = 'rgba(255,0,0,0.3)';
+                setTimeout(() => { flickerOverlay.style.background = 'transparent'; }, 500);
+            }
+        }
+
+        if (!pipeData.doorOpen) {
+            const vdx = pipeData.doorPos.x - player.position.x;
+            const vdz = pipeData.doorPos.z - player.position.z;
+            const vdist = Math.sqrt(vdx*vdx + vdz*vdz);
+            const hint = document.getElementById('pipe-door-hint');
+            if (vdist < 2.0) { hint.textContent = '点击进入通风口'; hint.classList.add('active'); }
+            else { hint.textContent = '找到通风口'; hint.classList.remove('active'); }
+        }
+        if (pipeData.doorOpen) {
+            const dp = Math.min((performance.now()/1000 - pipeData.doorOpenTime) / 1.0, 1.0);
+            if (pipeData.pipeDoor) pipeData.pipeDoor.scale.set(1-dp*0.3, 1-dp*0.3, 1);
+            if (dp >= 1.0) { transitionToRun(); return; }
+        }
+
+        renderer.setRenderTarget(renderTarget); renderer.render(scenes.pipe, camera); renderer.setRenderTarget(null);
+        postMaterial.uniforms.uTime.value = time;
+        // 大幅降低故障效果，保持高亮度
+        const baseDistort = 0.02 + pipeData.danger * 0.1;
+        postMaterial.uniforms.uDistortion.value = baseDistort;
+        postMaterial.uniforms.uRGBShift.value = baseDistort * 0.5;
+        postMaterial.uniforms.uFlicker.value = 0.02 + pipeData.danger * 0.1;
+        renderer.render(postScene, postCamera);
+        perfMonitor.tick();
+    }
+    document.getElementById('pipe-door-hint').addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (currentPhase === 'pipe' && !pipeData.doorOpen) {
+            const p = players.pipe;
+            const dx = pipeData.doorPos.x - p.position.x;
+            const dz = pipeData.doorPos.z - p.position.z;
+            if (Math.sqrt(dx*dx+dz*dz) < 2.0) { pipeData.doorOpen = true; pipeData.doorOpenTime = performance.now()/1000; }
+        }
+    });
+
+    // ==================== Level !（红色走廊跑酷）====================
+    let runData = { time: 0, distance: 0, totalDistance: 80, autoRun: true, endDoor: null };
+    function transitionToRun() {
+        currentPhase = 'run';
+        document.getElementById('pipe-door-ui').style.display = 'none';
+        document.getElementById('danger-bar').style.display = 'none';
+        document.getElementById('danger-text').style.display = 'none';
+        document.getElementById('entity-warning').style.display = 'none';
+        document.getElementById('run-hint').classList.add('visible');
+        setTimeout(() => document.getElementById('run-hint').classList.remove('visible'), 2000);
+        initRun();
+    }
+    function initRun() {
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color('#1a0000');
+        scene.fog = new THREE.FogExp2('#1a0000', 0.015);
+        scenes.run = scene;
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 50);
+        camera.rotation.order = 'YXZ';
+        cameras.run = camera;
+
+        const W = 5, H = 3.5, L = 100;
+        const floor = new THREE.Mesh(new THREE.PlaneGeometry(W, L), new THREE.MeshStandardMaterial({ color: '#330000', roughness: 0.8, metalness: 0.1 }));
+        floor.rotation.x = -Math.PI/2; scene.add(floor);
+        const ceil = new THREE.Mesh(new THREE.PlaneGeometry(W, L), new THREE.MeshStandardMaterial({ color: '#220000', roughness: 0.9 }));
+        ceil.rotation.x = Math.PI/2; ceil.position.y = H; scene.add(ceil);
+        const wallMat = new THREE.MeshStandardMaterial({ color: '#440000', roughness: 0.7, metalness: 0.2 });
+        const lw1 = new THREE.Mesh(new THREE.PlaneGeometry(L, H), wallMat); lw1.rotation.y = Math.PI/2; lw1.position.set(-W/2, H/2, 0); scene.add(lw1);
+        const lw2 = new THREE.Mesh(new THREE.PlaneGeometry(L, H), wallMat); lw2.rotation.y = -Math.PI/2; lw2.position.set(W/2, H/2, 0); scene.add(lw2);
+
+        for (let z=-L/2+5; z<L/2; z+=10) {
+            const light = new THREE.PointLight('#ff0000', 15, 10, 1.5);
+            light.position.set(0, H-0.3, z); scene.add(light);
+            const fixture = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.06, 0.15), new THREE.MeshBasicMaterial({ color: '#ff3333' }));
+            fixture.position.set(0, H-0.05, z); scene.add(fixture);
+        }
+        scene.add(new THREE.AmbientLight('#330000', 0.6));
+
+        const endDoor = createDoorMesh();
+        endDoor.group.position.set(0, 0, L/2 - 1);
+        scene.add(endDoor.group);
+        runData.endDoor = endDoor;
+
+        const endLight = new THREE.PointLight('#ffffff', 10, 15, 1);
+        endLight.position.set(0, 2, L/2 - 2); scene.add(endLight);
+
+        players.run = { position: new THREE.Vector3(0, 1.6, -L/2 + 2), yaw: 0, pitch: 0 };
+        camera.position.copy(players.run.position);
+        camera.rotation.y = players.run.yaw; camera.rotation.x = players.run.pitch;
+
+        document.getElementById('info-bar').style.display = 'block';
+        document.getElementById('level-tag').textContent = '后室 · Level !';
+
+        runData.time = 0; runData.distance = 0;
+        clocks.run = new THREE.Clock();
+        showTitle('Level—!');
+        animateRun();
+    }
+    function animateRun() {
+        if (currentPhase !== 'run') return;
+        requestAnimationFrame(animateRun);
+        if (document.hidden) return;
+        const delta = Math.min(clocks.run.getDelta(), 0.1);
+        const time = clocks.run.getElapsedTime();
+        const player = players.run;
+        const camera = cameras.run;
+
+        runData.time += delta;
+
+        let moveX = joystickDelta.x, moveZ = joystickDelta.z;
+        if (keys['w'] || keys['arrowup']) moveZ = Math.max(moveZ, 0.85);
+        if (keys['s'] || keys['arrowdown']) moveZ = Math.min(moveZ, -0.7);
+        if (keys['a'] || keys['arrowleft']) moveX = Math.min(moveX, -0.8);
+        if (keys['d'] || keys['arrowright']) moveX = Math.max(moveX, 0.8);
+        const mag = Math.sqrt(moveX*moveX + moveZ*moveZ);
+        if (mag > 1.0) { moveX /= mag; moveZ /= mag; }
+
+        moveZ = Math.max(moveZ, 0.4);
+
+        if (lookDelta.x !== 0 || lookDelta.y !== 0) {
+            player.yaw -= lookDelta.x * 0.003; player.pitch -= lookDelta.y * 0.0025;
+            player.pitch = Math.max(-0.55, Math.min(0.4, player.pitch));
+            lookDelta.x = 0; lookDelta.y = 0;
+        }
+        if (!mouseLookActive && lookTouchId === null) { lookDelta.x *= 0.85; lookDelta.y *= 0.85; if (Math.abs(lookDelta.x) < 0.01) lookDelta.x = 0; if (Math.abs(lookDelta.y) < 0.01) lookDelta.y = 0; }
+
+        const fx = -Math.sin(player.yaw), fz = -Math.cos(player.yaw);
+        const rx = Math.cos(player.yaw), rz = -Math.sin(player.yaw);
+        const speed = 5.0;
+        player.position.x += (fx*moveZ + rx*moveX) * speed * delta;
+        player.position.z += (fz*moveZ + rz*moveX) * speed * delta;
+        player.position.x = Math.max(-2.2, Math.min(2.2, player.position.x));
+
+        camera.position.copy(player.position); camera.rotation.y = player.yaw; camera.rotation.x = player.pitch;
+        camera.position.y += Math.sin(time*12)*0.02;
+        camera.rotation.z = Math.sin(time*8)*0.01;
+
+        if (player.position.z > 48) {
+            transitionToEnding();
+            return;
+        }
+
+        const chaseProgress = (player.position.z + 48) / 96;
+        const chaseIntensity = 0.1 + chaseProgress * 0.3;
+
+        renderer.setRenderTarget(renderTarget); renderer.render(scenes.run, camera); renderer.setRenderTarget(null);
+        postMaterial.uniforms.uTime.value = time;
+        postMaterial.uniforms.uDistortion.value = 0.1 + chaseIntensity * 0.2 + Math.sin(time*10)*0.05;
+        postMaterial.uniforms.uRGBShift.value = 0.1 + chaseIntensity * 0.3;
+        postMaterial.uniforms.uFlicker.value = 0.2 + Math.sin(time*5)*0.1 + Math.random()*0.1;
+        renderer.render(postScene, postCamera);
+        perfMonitor.tick();
+    }
+
+    // ==================== 结局 ====================
+    function transitionToEnding() {
+        currentPhase = 'ending';
+        document.getElementById('info-bar').style.display = 'none';
+        document.getElementById('ending-screen').style.display = 'flex';
+    }
+
+    // ==================== 启动 ====================
+    window.addEventListener('load', function() {
+        const ls = document.getElementById('loading-screen');
+        if (ls) { ls.style.opacity = '0'; ls.style.transition = 'opacity 0.5s'; setTimeout(() => ls.remove(), 500); }
+        initRenderer();
+        initTunnel();
+        animateTunnel();
+        updateTime();
+    });
+    </script>
+</body>
+</html>
