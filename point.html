@@ -1,0 +1,772 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>弹幕地狱·计时版</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            overflow: hidden;
+            background: #000;
+            cursor: none;
+            user-select: none;
+            -webkit-user-select: none;
+            font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
+        }
+        canvas { display: block; }
+
+        #topBar {
+            position: absolute;
+            top: 20px;
+            left: 0;
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 30px;
+            z-index: 10;
+            pointer-events: none;
+        }
+        #timer {
+            color: #fff;
+            font-family: 'Courier New', 'Consolas', monospace;
+            font-size: 42px;
+            font-weight: bold;
+            letter-spacing: 4px;
+            text-shadow: 0 0 20px rgba(255,255,255,0.6), 0 0 40px rgba(255,255,255,0.3);
+            transition: color 0.3s;
+        }
+        #timer.danger { color: #ff4444; text-shadow: 0 0 20px rgba(255,68,68,0.8); }
+        #timer.victory { color: #ffd700; text-shadow: 0 0 20px rgba(255,215,0,0.8); }
+
+        #stageInfo {
+            color: rgba(255,255,255,0.7);
+            font-size: 16px;
+            letter-spacing: 2px;
+            text-align: center;
+        }
+        #stageInfo .stage { color: #ffcc00; font-weight: bold; font-size: 20px; }
+
+        #startHint {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: rgba(255,255,255,0.6);
+            font-size: 20px;
+            pointer-events: none;
+            z-index: 5;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse { 0%,100%{opacity:0.4} 50%{opacity:1} }
+
+        #difficultyBar {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 200px;
+            height: 4px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 2px;
+            overflow: hidden;
+            z-index: 10;
+            pointer-events: none;
+        }
+        #difficultyFill {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #ffcc00, #ff0000);
+            transition: width 0.3s;
+            box-shadow: 0 0 10px rgba(255,0,0,0.5);
+        }
+
+        /* 幽灵保存点 - 伪装成子弹 */
+        #ghostSave {
+            display: none;
+            position: absolute;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: radial-gradient(circle at 30% 30%, #fff 0%, #ffcc00 40%, #ff6600 100%);
+            box-shadow: 0 0 15px rgba(255, 200, 0, 0.6), 0 0 30px rgba(255, 100, 0, 0.3);
+            cursor: pointer;
+            z-index: 15;
+            pointer-events: auto;
+            animation: ghostPulse 0.2s infinite alternate;
+            transition: transform 0.15s;
+        }
+        #ghostSave::after {
+            content: '保存';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: rgba(255, 255, 255, 0);
+            font-size: 10px;
+            letter-spacing: 2px;
+            white-space: nowrap;
+            transition: all 0.3s;
+            pointer-events: none;
+        }
+        #ghostSave:hover {
+            transform: scale(1.8);
+            box-shadow: 0 0 25px rgba(255, 215, 0, 0.9), 0 0 50px rgba(255, 100, 0, 0.5);
+        }
+        #ghostSave:hover::after {
+            color: rgba(255, 255, 255, 0.9);
+            text-shadow: 0 0 10px rgba(255, 215, 0, 0.8);
+        }
+        @keyframes ghostPulse {
+            0% { opacity: 0.7; transform: scale(1); }
+            100% { opacity: 1; transform: scale(1.15); }
+        }
+
+        /* 保存成功 */
+        #saveSuccess {
+            position: absolute;
+            top: 40%;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #ffd700;
+            font-size: 24px;
+            font-weight: bold;
+            letter-spacing: 6px;
+            text-shadow: 0 0 30px rgba(255,215,0,0.9);
+            z-index: 50;
+            pointer-events: none;
+            opacity: 0;
+        }
+        #saveSuccess.show {
+            animation: saveBurst 1.2s ease-out forwards;
+        }
+        @keyframes saveBurst {
+            0% { transform: translateX(-50%) scale(0.3); opacity: 0; }
+            15% { transform: translateX(-50%) scale(1.3); opacity: 1; }
+            100% { transform: translateX(-50%) scale(1) translateY(-40px); opacity: 0; }
+        }
+
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0,0,0,0.92);
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            backdrop-filter: blur(8px);
+        }
+        .modal-overlay.active { display: flex; animation: fadeIn 0.4s ease-out; }
+        @keyframes fadeIn { from{opacity:0;transform:scale(0.9)} to{opacity:1;transform:scale(1)} }
+
+        .modal-box {
+            background: rgba(10,10,10,0.95);
+            border: 1px solid #222;
+            padding: 50px 65px;
+            border-radius: 12px;
+            text-align: center;
+            box-shadow: 0 0 80px rgba(255,0,0,0.08);
+            min-width: 320px;
+            max-width: 90vw;
+        }
+        .modal-box h1 {
+            color: #fff;
+            font-size: 36px;
+            margin-bottom: 12px;
+            letter-spacing: 4px;
+        }
+        .modal-box .subtitle {
+            color: #ff3333;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            letter-spacing: 4px;
+            margin-bottom: 25px;
+        }
+        .modal-box .time-display {
+            color: #888;
+            font-family: 'Courier New', monospace;
+            font-size: 18px;
+            margin-bottom: 8px;
+            letter-spacing: 2px;
+        }
+        .modal-box .hint-msg {
+            color: #444;
+            font-size: 13px;
+            margin-bottom: 30px;
+            line-height: 1.8;
+            min-height: 50px;
+        }
+        .modal-box .hint-msg .found {
+            color: #aa8800;
+        }
+        .modal-box .hint-msg .whisper {
+            color: #333;
+            font-size: 12px;
+            letter-spacing: 1px;
+        }
+
+        .btn-row { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+        button {
+            border: none;
+            padding: 14px 32px;
+            font-size: 16px;
+            font-family: 'Microsoft YaHei', sans-serif;
+            cursor: pointer;
+            border-radius: 6px;
+            transition: all 0.3s;
+            letter-spacing: 3px;
+        }
+        #restartBtn {
+            background: #cc0000;
+            color: #fff;
+            box-shadow: 0 0 20px rgba(255,0,0,0.3);
+        }
+        #restartBtn:hover {
+            background: #ff0000;
+            transform: translateY(-2px);
+            box-shadow: 0 0 30px rgba(255,0,0,0.5);
+        }
+        #checkpointBtn {
+            background: #664400;
+            color: #cc9900;
+            box-shadow: 0 0 15px rgba(255,170,0,0.1);
+        }
+        #checkpointBtn:hover:not(:disabled) {
+            background: #885500;
+            color: #ffcc00;
+            transform: translateY(-2px);
+            box-shadow: 0 0 25px rgba(255,170,0,0.3);
+        }
+        #checkpointBtn:disabled {
+            opacity: 0.2;
+            cursor: not-allowed;
+            background: #1a1a1a;
+            color: #333;
+        }
+
+        #victoryModal .modal-box {
+            border-color: rgba(255,215,0,0.2);
+            box-shadow: 0 0 80px rgba(255,215,0,0.1);
+        }
+        #victoryModal h1 { color: #ffd700; text-shadow: 0 0 30px rgba(255,215,0,0.3); letter-spacing: 6px; }
+        #victoryModal .subtitle { color: #cc9900; }
+        #victoryAgain {
+            background: #b8860b;
+            color: #000;
+            box-shadow: 0 0 20px rgba(255,215,0,0.3);
+        }
+        #victoryAgain:hover {
+            background: #ffd700;
+            box-shadow: 0 0 35px rgba(255,215,0,0.6);
+        }
+    </style>
+</head>
+<body>
+
+    <div id="topBar">
+        <div id="timer">00:00</div>
+        <div id="stageInfo">
+            <div class="stage">STAGE <span id="stageNum">1</span></div>
+        </div>
+    </div>
+
+    <div id="startHint">移动鼠标开始游戏</div>
+    <div id="difficultyBar"><div id="difficultyFill"></div></div>
+
+    <!-- 伪装成子弹的幽灵保存点 -->
+    <div id="ghostSave"></div>
+    <div id="saveSuccess">已保存</div>
+
+    <!-- 死亡弹窗 -->
+    <div id="gameOverModal" class="modal-overlay">
+        <div class="modal-box">
+            <h1>时间到</h1>
+            <div class="subtitle">SURVIVAL ENDED</div>
+            <p class="time-display" id="finalTime">00:00</p>
+            <p class="hint-msg" id="hintMsg"></p>
+            <div class="btn-row">
+                <button id="checkpointBtn">从检查点再来</button>
+                <button id="restartBtn">从头再来</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 胜利弹窗 -->
+    <div id="victoryModal" class="modal-overlay">
+        <div class="modal-box">
+            <h1>地狱征服者</h1>
+            <div class="subtitle">VICTORY</div>
+            <p class="time-display" id="victoryTime">00:00</p>
+            <p style="color:#666;font-size:13px;margin-bottom:25px;">你已穿越弹幕地狱</p>
+            <div class="btn-row">
+                <button id="victoryAgain">再次挑战</button>
+            </div>
+        </div>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const timerEl = document.getElementById('timer');
+const startHint = document.getElementById('startHint');
+const stageNumEl = document.getElementById('stageNum');
+const ghostSave = document.getElementById('ghostSave');
+const saveSuccess = document.getElementById('saveSuccess');
+
+const gameOverModal = document.getElementById('gameOverModal');
+const finalTimeEl = document.getElementById('finalTime');
+const hintMsgEl = document.getElementById('hintMsg');
+const checkpointBtn = document.getElementById('checkpointBtn');
+const restartBtn = document.getElementById('restartBtn');
+
+const victoryModal = document.getElementById('victoryModal');
+const victoryTimeEl = document.getElementById('victoryTime');
+const victoryAgain = document.getElementById('victoryAgain');
+
+let width, height;
+let gameState = 'waiting';
+let startTime = 0;
+let elapsed = 0;
+let mouseX = 0, mouseY = 0;
+let playerX = 0, playerY = 0;
+const playerRadius = 6;
+let bullets = [];
+let particles = [];
+let stars = [];
+let difficulty = 0;
+let frameCount = 0;
+
+const CHECKPOINTS = [30, 60, 90];
+const VICTORY_TIME = 120;
+let savedCheckpoint = 0;
+let ghostActive = false;
+let ghostTimer = null;
+let ghostSpawnedThisWindow = new Set();
+
+function resize() {
+    width = canvas.width = window.innerWidth;
+    height = canvas.height = window.innerHeight;
+    initStars();
+}
+function initStars() {
+    stars = [];
+    for (let i = 0; i < 150; i++) {
+        stars.push({
+            x: Math.random() * width,
+            y: Math.random() * height,
+            size: Math.random() * 1.5,
+            alpha: Math.random() * 0.6 + 0.1,
+            twinkleSpeed: Math.random() * 0.02 + 0.005
+        });
+    }
+}
+window.addEventListener('resize', resize);
+resize();
+
+mouseX = width / 2; mouseY = height / 2;
+playerX = mouseX; playerY = mouseY;
+
+function startGame(fromCheckpoint = 0) {
+    gameState = 'playing';
+    bullets = [];
+    particles = [];
+    frameCount = 0;
+    difficulty = 0;
+    ghostActive = false;
+    ghostSpawnedThisWindow.clear();
+    ghostSave.style.display = 'none';
+    if (ghostTimer) clearTimeout(ghostTimer);
+
+    if (fromCheckpoint > 0) {
+        startTime = Date.now() - fromCheckpoint * 1000;
+        elapsed = fromCheckpoint;
+    } else {
+        startTime = Date.now();
+        elapsed = 0;
+        savedCheckpoint = 0;
+        timerEl.classList.remove('danger', 'victory');
+    }
+
+    startHint.style.display = 'none';
+    gameOverModal.classList.remove('active');
+    victoryModal.classList.remove('active');
+    document.body.style.cursor = 'none';
+    updateStageInfo();
+}
+
+document.addEventListener('mousemove', (e) => {
+    mouseX = e.clientX; mouseY = e.clientY;
+    if (gameState === 'waiting') startGame(0);
+});
+document.addEventListener('touchmove', (e) => {
+    e.preventDefault();
+    const touch = e.touches[0];
+    mouseX = touch.clientX; mouseY = touch.clientY;
+    if (gameState === 'waiting') startGame(0);
+}, { passive: false });
+
+// 生成幽灵保存点 - 伪装成子弹，混在弹幕中
+function spawnGhostSave(cpTime) {
+    if (gameState !== 'playing') return;
+
+    // 找一个弹幕附近的"安全"位置（相对安全，但附近有子弹飞过）
+    let gx, gy;
+    let attempts = 0;
+    do {
+        gx = 50 + Math.random() * (width - 100);
+        gy = 50 + Math.random() * (height - 100);
+        attempts++;
+    } while (attempts < 20 && Math.abs(gx - playerX) < 100 && Math.abs(gy - playerY) < 100);
+
+    ghostSave.style.left = (gx - 7) + 'px';
+    ghostSave.style.top = (gy - 7) + 'px';
+    ghostSave.style.display = 'block';
+    ghostActive = true;
+
+    ghostTimer = setTimeout(() => {
+        ghostSave.style.display = 'none';
+        ghostActive = false;
+    }, 1500);
+}
+
+ghostSave.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (!ghostActive || gameState !== 'playing') return;
+
+    for (let i = CHECKPOINTS.length - 1; i >= 0; i--) {
+        if (elapsed >= CHECKPOINTS[i] - 3 && savedCheckpoint < CHECKPOINTS[i]) {
+            savedCheckpoint = CHECKPOINTS[i];
+            break;
+        }
+    }
+
+    ghostSave.style.display = 'none';
+    ghostActive = false;
+    if (ghostTimer) clearTimeout(ghostTimer);
+
+    // 金色爆发粒子
+    const rect = ghostSave.getBoundingClientRect();
+    for (let i = 0; i < 25; i++) {
+        particles.push(new Particle(rect.left + 7, rect.top + 7, '#ffd700', 2.5));
+    }
+    saveSuccess.classList.add('show');
+    setTimeout(() => saveSuccess.classList.remove('show'), 1200);
+});
+
+function updateStageInfo() {
+    let stage = 1;
+    if (elapsed >= 90) stage = 4;
+    else if (elapsed >= 60) stage = 3;
+    else if (elapsed >= 30) stage = 2;
+    stageNumEl.textContent = stage;
+}
+
+class Bullet {
+    constructor() {
+        const side = Math.floor(Math.random() * 4);
+        const margin = 30;
+        if (side === 0) { this.x = Math.random() * width; this.y = -margin; }
+        else if (side === 1) { this.x = width + margin; this.y = Math.random() * height; }
+        else if (side === 2) { this.x = Math.random() * width; this.y = height + margin; }
+        else { this.x = -margin; this.y = Math.random() * height; }
+
+        const angle = Math.atan2(playerY - this.y, playerX - this.x);
+        const spread = (Math.random() - 0.5) * (0.3 + difficulty * 0.5);
+        const speedMult = 1 + difficulty * 4;
+        const baseSpeed = (1.5 + Math.random() * 2) * speedMult;
+        this.vx = Math.cos(angle + spread) * baseSpeed;
+        this.vy = Math.sin(angle + spread) * baseSpeed;
+        this.size = (3 + Math.random() * 3) * (1 + difficulty * 0.5);
+        this.time = 0;
+
+        const yellowFactor = Math.sin(elapsed * 0.15) * 0.5 + 0.5;
+        const g = Math.floor(200 * yellowFactor * (0.5 + Math.random() * 0.5));
+        this.color = `rgb(255, ${g}, 0)`;
+        this.glowColor = `rgba(255, ${g}, 0, 0.8)`;
+
+        const rand = Math.random();
+        if (difficulty < 0.2 || rand < 0.5) this.type = 'linear';
+        else if (difficulty < 0.4 || rand < 0.7) {
+            this.type = 'wave';
+            this.waveFreq = 0.08 + Math.random() * 0.08;
+            this.waveAmp = 2 + Math.random() * 3;
+        } else if (difficulty < 0.6 || rand < 0.85) {
+            this.type = 'homing';
+            this.homingStrength = 0.08 + difficulty * 0.15;
+            this.maxSpeed = baseSpeed * 1.5;
+        } else {
+            this.type = 'spiral';
+            this.spiralFreq = 0.12 + Math.random() * 0.1;
+            this.spiralAmp = 2 + Math.random() * 4;
+        }
+        this.trail = [];
+    }
+    update() {
+        this.time++;
+        this.trail.push({ x: this.x, y: this.y });
+        if (this.trail.length > 8) this.trail.shift();
+
+        if (this.type === 'linear') {
+            this.x += this.vx; this.y += this.vy;
+        } else if (this.type === 'wave') {
+            this.x += this.vx + Math.sin(this.time * this.waveFreq) * this.waveAmp;
+            this.y += this.vy + Math.cos(this.time * this.waveFreq) * this.waveAmp;
+        } else if (this.type === 'homing') {
+            const angle = Math.atan2(playerY - this.y, playerX - this.x);
+            this.vx += Math.cos(angle) * this.homingStrength;
+            this.vy += Math.sin(angle) * this.homingStrength;
+            const speed = Math.sqrt(this.vx**2 + this.vy**2);
+            if (speed > this.maxSpeed) {
+                this.vx = (this.vx / speed) * this.maxSpeed;
+                this.vy = (this.vy / speed) * this.maxSpeed;
+            }
+            this.x += this.vx; this.y += this.vy;
+        } else if (this.type === 'spiral') {
+            this.x += this.vx + Math.cos(this.time * this.spiralFreq) * this.spiralAmp;
+            this.y += this.vy + Math.sin(this.time * this.spiralFreq) * this.spiralAmp;
+        }
+        if (this.time % 10 === 0) {
+            const flicker = Math.sin(this.time * 0.3) * 30;
+            const g = Math.max(0, Math.min(255, 100 + flicker + difficulty * 100));
+            this.color = `rgb(255, ${g}, 0)`;
+        }
+    }
+    draw() {
+        ctx.save();
+        for (let i = 0; i < this.trail.length; i++) {
+            const t = this.trail[i];
+            ctx.globalAlpha = (i / this.trail.length) * 0.4;
+            ctx.fillStyle = this.color;
+            ctx.beginPath();
+            ctx.arc(t.x, t.y, this.size * (i / this.trail.length) * 0.7, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        ctx.restore();
+        ctx.save();
+        ctx.shadowBlur = 20 + difficulty * 15;
+        ctx.shadowColor = this.glowColor;
+        ctx.fillStyle = this.color;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = 'rgba(255,255,255,0.6)';
+        ctx.beginPath();
+        ctx.arc(this.x - this.size * 0.3, this.y - this.size * 0.3, this.size * 0.4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    }
+    isOffScreen() {
+        return this.x < -60 || this.x > width + 60 || this.y < -60 || this.y > height + 60;
+    }
+}
+
+class Particle {
+    constructor(x, y, color, speed = 1) {
+        const angle = Math.random() * Math.PI * 2;
+        const velocity = (Math.random() * 5 + 2) * speed;
+        this.x = x; this.y = y;
+        this.vx = Math.cos(angle) * velocity;
+        this.vy = Math.sin(angle) * velocity;
+        this.life = 1;
+        this.decay = Math.random() * 0.03 + 0.02;
+        this.color = color;
+        this.size = Math.random() * 5 + 2;
+    }
+    update() {
+        this.x += this.vx; this.y += this.vy;
+        this.vx *= 0.98; this.vy *= 0.98;
+        this.life -= this.decay;
+        this.size *= 0.95;
+    }
+    draw() {
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, this.life);
+        ctx.fillStyle = this.color;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    }
+}
+
+function spawnBullet() {
+    const baseRate = 0.015;
+    const spawnRate = baseRate + difficulty * 0.12;
+    if (Math.random() < spawnRate) bullets.push(new Bullet());
+    if (difficulty > 0.5 && Math.random() < 0.008 * difficulty) {
+        const count = Math.floor(3 + difficulty * 8);
+        for (let i = 0; i < count; i++) {
+            setTimeout(() => { if (gameState === 'playing') bullets.push(new Bullet()); }, i * 50);
+        }
+    }
+    if (difficulty > 0.8 && Math.random() < 0.005) {
+        const count = 12;
+        const cx = Math.random() * width;
+        const cy = Math.random() * height;
+        for (let i = 0; i < count; i++) {
+            const angle = (Math.PI * 2 / count) * i;
+            const b = new Bullet();
+            b.x = cx; b.y = cy;
+            b.vx = Math.cos(angle) * 3;
+            b.vy = Math.sin(angle) * 3;
+            b.type = 'linear';
+            bullets.push(b);
+        }
+    }
+}
+
+function checkCollision() {
+    for (let b of bullets) {
+        const dx = playerX - b.x;
+        const dy = playerY - b.y;
+        if (Math.sqrt(dx*dx + dy*dy) < playerRadius + b.size * 0.8) return true;
+    }
+    return false;
+}
+
+function createExplosion(x, y) {
+    const colors = ['#ffffff', '#ff0000', '#ffcc00', '#ff6600'];
+    for (let i = 0; i < 30; i++) {
+        particles.push(new Particle(x, y, colors[Math.floor(Math.random()*colors.length)], 1.5));
+    }
+}
+
+function triggerGameOver() {
+    gameState = 'gameover';
+    ghostSave.style.display = 'none';
+    ghostActive = false;
+    createExplosion(playerX, playerY);
+    const minutes = Math.floor(elapsed/60).toString().padStart(2,'0');
+    const seconds = (elapsed%60).toString().padStart(2,'0');
+    finalTimeEl.textContent = `${minutes}:${seconds}`;
+
+    if (savedCheckpoint > 0) {
+        hintMsgEl.innerHTML = `你在混乱中抓住了某个<span class="found">闪烁的东西</span>。<br>它记住了你到达 ${savedCheckpoint} 秒时的样子。`;
+        checkpointBtn.disabled = false;
+    } else {
+        hintMsgEl.innerHTML = `一切归于虚无。<br><span class="whisper">……有时候，角落里会闪过不该存在的光。</span>`;
+        checkpointBtn.disabled = true;
+    }
+
+    document.body.style.cursor = 'auto';
+    setTimeout(() => gameOverModal.classList.add('active'), 800);
+}
+
+function triggerVictory() {
+    gameState = 'victory';
+    const minutes = Math.floor(elapsed/60).toString().padStart(2,'0');
+    const seconds = (elapsed%60).toString().padStart(2,'0');
+    victoryTimeEl.textContent = `${minutes}:${seconds}`;
+    document.body.style.cursor = 'auto';
+    victoryModal.classList.add('active');
+}
+
+function update() {
+    frameCount++;
+    if (gameState === 'playing') {
+        elapsed = Math.floor((Date.now() - startTime) / 1000);
+        const minutes = Math.floor(elapsed/60).toString().padStart(2,'0');
+        const seconds = (elapsed%60).toString().padStart(2,'0');
+        timerEl.textContent = `${minutes}:${seconds}`;
+
+        // 检查点窗口：28-30, 58-60, 88-90，只触发一次
+        for (let cp of CHECKPOINTS) {
+            if (elapsed >= cp - 2 && elapsed <= cp && !ghostSpawnedThisWindow.has(cp) && savedCheckpoint < cp) {
+                if (Math.random() < 0.3) { // 30% 概率在该窗口触发
+                    spawnGhostSave(cp);
+                    ghostSpawnedThisWindow.add(cp);
+                }
+            }
+            // 窗口过了但没触发，也标记为已处理
+            if (elapsed > cp && !ghostSpawnedThisWindow.has(cp)) {
+                ghostSpawnedThisWindow.add(cp);
+            }
+        }
+
+        if (elapsed >= VICTORY_TIME) {
+            triggerVictory();
+            return;
+        }
+
+        updateStageInfo();
+        difficulty = Math.min(elapsed / 45, 1);
+        document.getElementById('difficultyFill').style.width = `${difficulty * 100}%`;
+        if (elapsed >= 30) timerEl.classList.add('danger');
+
+        playerX += (mouseX - playerX) * 0.25;
+        playerY += (mouseY - playerY) * 0.25;
+
+        spawnBullet();
+        for (let i = bullets.length - 1; i >= 0; i--) {
+            bullets[i].update();
+            if (bullets[i].isOffScreen()) bullets.splice(i, 1);
+        }
+        if (checkCollision()) triggerGameOver();
+    }
+    for (let i = particles.length - 1; i >= 0; i--) {
+        particles[i].update();
+        if (particles[i].life <= 0) particles.splice(i, 1);
+    }
+}
+
+function draw() {
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    ctx.fillRect(0, 0, width, height);
+    ctx.save();
+    stars.forEach(star => {
+        star.alpha += Math.sin(frameCount * star.twinkleSpeed) * 0.01;
+        star.alpha = Math.max(0.1, Math.min(0.7, star.alpha));
+        ctx.globalAlpha = star.alpha;
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
+        ctx.fill();
+    });
+    ctx.restore();
+
+    if (gameState !== 'gameover' || particles.length > 0) {
+        ctx.save();
+        const glowSize = playerRadius * (3 + Math.sin(frameCount * 0.1) * 0.5);
+        const gradient = ctx.createRadialGradient(playerX, playerY, 0, playerX, playerY, glowSize);
+        gradient.addColorStop(0, 'rgba(255,255,255,0.3)');
+        gradient.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(playerX, playerY, glowSize, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 25;
+        ctx.shadowColor = 'rgba(255,255,255,0.9)';
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.arc(playerX, playerY, playerRadius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+        ctx.lineWidth = 2;
+        ctx.shadowBlur = 10;
+        ctx.beginPath();
+        ctx.arc(playerX, playerY, playerRadius + 8 + Math.sin(frameCount * 0.15) * 3, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+    }
+    bullets.forEach(b => b.draw());
+    particles.forEach(p => p.draw());
+}
+
+function loop() {
+    update();
+    draw();
+    requestAnimationFrame(loop);
+}
+
+restartBtn.addEventListener('click', () => startGame(0));
+checkpointBtn.addEventListener('click', () => startGame(savedCheckpoint));
+victoryAgain.addEventListener('click', () => startGame(0));
+
+loop();
+</script>
+</body>
+</html>
