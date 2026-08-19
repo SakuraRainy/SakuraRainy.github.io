@@ -35,7 +35,6 @@
     position: relative;
   }
 
-  /* 背景光斑效果 */
   .sakura-bg {
     position: fixed;
     top: 0; left: 0; right: 0; bottom: 0;
@@ -81,7 +80,6 @@
     z-index: 1;
   }
 
-  /* 顶部导航 */
   header { padding: 28px 0 16px; text-align: center; }
   .logo {
     display: inline-flex;
@@ -92,11 +90,6 @@
     font-weight: 700;
     color: var(--ink);
     text-decoration: none;
-  }
-  .logo-icon { font-size: 1.8rem; animation: bounce 2s ease-in-out infinite; }
-  @keyframes bounce {
-    0%, 100% { transform: translateY(0) rotate(0deg); }
-    50% { transform: translateY(-6px) rotate(8deg); }
   }
   nav {
     display: flex;
@@ -125,7 +118,6 @@
   }
   nav a:hover::after { width: 100%; }
 
-  /* Hero */
   .hero { padding: 60px 0 40px; text-align: center; }
   .hero-eyebrow {
     display: inline-block;
@@ -171,7 +163,6 @@
   }
   .stat-label { font-size: 0.85rem; color: var(--muted); margin-top: 6px; }
 
-  /* 搜索栏 */
   .search-wrap { max-width: 480px; margin: 32px auto 0; position: relative; }
   .search-wrap input {
     width: 100%;
@@ -198,7 +189,6 @@
     font-size: 1rem;
   }
 
-  /* 分类标签 */
   .filters {
     display: flex;
     justify-content: center;
@@ -225,7 +215,6 @@
     border-color: transparent;
   }
 
-  /* 游戏卡片网格 */
   .games-section { padding-bottom: 60px; }
   .section-title {
     font-family: 'Quicksand', sans-serif;
@@ -317,12 +306,10 @@
   .game-arrow { color: var(--accent); font-size: 1.1rem; transition: transform 0.2s; }
   .game-card:hover .game-arrow { transform: translateX(4px); }
 
-  /* 空状态 */
   .empty { text-align: center; padding: 60px 20px; color: var(--muted); }
   .empty-icon { font-size: 3rem; margin-bottom: 12px; }
   .empty-text { font-size: 1rem; }
 
-  /* 教程部分 */
   .tutorial {
     background: rgba(255, 255, 255, 0.85);
     backdrop-filter: blur(10px);
@@ -357,7 +344,6 @@
   .step-title { font-weight: 600; margin-bottom: 6px; color: var(--ink); }
   .step-desc { font-size: 0.88rem; color: var(--muted); line-height: 1.5; }
 
-  /* 代码块 */
   code {
     background: var(--pink-soft);
     color: var(--accent);
@@ -380,7 +366,6 @@
   .code-block .comment { color: #888888; }
   .code-block .cmd { color: #ffffff; font-weight: 600; }
 
-  /* 页脚 */
   footer {
     text-align: center;
     padding: 40px 0 30px;
@@ -389,9 +374,7 @@
   }
   footer a { color: #ffffff; text-decoration: none; font-weight: 500; }
   footer a:hover { text-decoration: underline; }
-  .footer-hearts { margin-top: 10px; font-size: 0.85rem; }
 
-  /* 响应式 */
   @media (max-width: 600px) {
     .hero { padding: 40px 0 24px; }
     .hero-stats { gap: 24px; }
@@ -508,12 +491,11 @@
 <script>
   // ============================================
   // 🎮 在这里添加你的游戏！
-  // 字段说明：
   //   title  - 游戏名称（必填）
-  //   file   - HTML 文件名（必填），如 "snake.html"
+  //   file   - HTML 文件名（必填）
   //   desc   - 一句话介绍
   //   emoji  - 卡片大图标
-  //   tags   - 标签数组（用于筛选），如 ["休闲", "像素"]
+  //   tags   - 标签数组
   // ============================================
   const games = [
     {
@@ -524,11 +506,81 @@
       tags: ["经典", "休闲"]
     },
     {
+      title: "俄罗斯方块",
+      file: "tetris.html",
+      desc: "消除行数、堆叠方块，考验反应与策略的经典。",
+      emoji: "🧱",
+      tags: ["经典", "休闲"]
+    },
+    {
+      title: "扫雷",
+      file: "minesweeper.html",
+      desc: "靠逻辑找出所有安全格子，小心脚下！",
+      emoji: "💣",
+      tags: ["经典", "益智"]
+    },
+    {
       title: "2048",
       file: "2048.html",
       desc: "合并相同数字，挑战 2048 吧！",
       emoji: "🔢",
       tags: ["益智", "休闲"]
+    },
+    {
+      title: "记忆翻牌",
+      file: "memory.html",
+      desc: "翻开两张相同的卡片，训练你的记忆力。",
+      emoji: "🃏",
+      tags: ["益智", "休闲"]
+    },
+    {
+      title: "像素小鸟",
+      file: "flappy.html",
+      desc: "点击屏幕让小鸟飞翔，穿越水管障碍。",
+      emoji: "🐦",
+      tags: ["经典", "休闲"]
+    },
+    {
+      title: "弹球",
+      file: "pinball.html",
+      desc: "控制挡板反弹小球，击碎所有砖块。",
+      emoji: "🎯",
+      tags: ["经典", "休闲"]
+    },
+    {
+      title: "迷宫探险",
+      file: "maze.html",
+      desc: "随机生成迷宫，找到通往出口的路线。",
+      emoji: "🗺️",
+      tags: ["益智", "休闲"]
+    },
+    {
+      title: "打地鼠",
+      file: "whack.html",
+      desc: "地鼠随机冒出头，看谁打得又快又准。",
+      emoji: "🔨",
+      tags: ["休闲", "反应"]
+    },
+    {
+      title: "五子棋",
+      file: "gomoku.html",
+      desc: "黑白对弈，先连成五子者获胜。",
+      emoji: "⚫",
+      tags: ["益智", "策略"]
+    },
+    {
+      title: "扫一扫",
+      file: "minesweep2.html",
+      desc: "进阶版扫雷，挑战更大的雷区。",
+      emoji: "💎",
+      tags: ["益智", "经典"]
+    },
+    {
+      title: "跳一跳",
+      file: "jump.html",
+      desc: "蓄力跳跃，精准落到下一块平台。",
+      emoji: "🦘",
+      tags: ["休闲", "反应"]
     },
     {
       title: "后室",
@@ -563,8 +615,8 @@
       file: "learn.html",
       desc: "括补学物理可视化工具，支持多种功能和视图",
       emoji: "🧠",
-      tags: ["物理","益智"]
-    }，
+      tags: ["物理", "益智"]
+    },
     {
       title: "笼中鸟",
       file: "cagebird.html",
@@ -572,8 +624,6 @@
       emoji: "🐦",
       tags: ["休闲"]
     }
-    
-    // 👇 在这里继续添加更多游戏...
   ];
 
   // ========== 渲染逻辑（无需修改） ==========
@@ -586,12 +636,10 @@
   let currentTag = 'all';
   let keyword = '';
 
-  // 收集所有标签
   const allTags = new Set();
   games.forEach(g => (g.tags || []).forEach(t => allTags.add(t)));
   const tags = ['all', ...Array.from(allTags)];
 
-  // 渲染筛选按钮
   filtersEl.innerHTML = tags.map(t =>
     `<button class="filter-btn ${t === 'all' ? 'active' : ''}" data-tag="${t}">${t === 'all' ? '全部' : t}</button>`
   ).join('');
@@ -605,7 +653,6 @@
     });
   });
 
-  // 渲染游戏卡片
   function render() {
     const filtered = games.filter(g => {
       const matchTag = currentTag === 'all' || (g.tags || []).includes(currentTag);
@@ -646,11 +693,9 @@
     render();
   });
 
-  // 更新顶部统计
   gameCountEl.textContent = games.length;
   tagCountEl.textContent = allTags.size;
 
-  // 首屏渲染
   render();
 </script>
 
